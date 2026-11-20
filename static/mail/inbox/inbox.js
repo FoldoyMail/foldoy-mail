@@ -342,7 +342,43 @@ function renderRail() {
 }
 
 let backingT = 0;
-function setView(view, depth) { if (app.dataset.depth === 'pane' && depth === 'list') { app.classList.add('backing'); clearTimeout(backingT); backingT = setTimeout(() => app.classList.remove('backing'), 320); } app.dataset.view = view; app.dataset.depth = depth; if (view !== 'mail') document.documentElement.removeAttribute('data-boot-view'); }
+const SPLIT_KEY = 'foldoy-listw', SPLIT_MIN = 300;
+const split = document.createElement('div');
+split.className = 'lsplit'; split.hidden = true; split.tabIndex = 0;
+split.setAttribute('role', 'separator'); split.setAttribute('aria-orientation', 'vertical'); split.setAttribute('aria-label', 'Resize the list');
+split.title = 'Drag to resize. Double-click to reset.';
+app.append(split);
+const colW = () => parseFloat(getComputedStyle(app).gridTemplateColumns.split(' ')[1]) || list.offsetWidth;
+const splitMax = () => Math.max(SPLIT_MIN + 60, app.offsetWidth - list.offsetLeft - 440);
+const setListW = w => {
+  if (w) app.style.setProperty('--list-user', `${Math.round(Math.min(splitMax(), Math.max(SPLIT_MIN, w)))}px`);
+  else app.style.removeProperty('--list-user');
+  requestAnimationFrame(placeSplit);
+};
+function placeSplit() {
+  const on = !phone() && splitPane() && app.dataset.view === 'mail';
+  split.hidden = !on;
+  if (on) { split.style.left = `${list.offsetLeft + list.offsetWidth}px`; split.setAttribute('aria-valuenow', String(list.offsetWidth)); }
+}
+{ const w = +recall(SPLIT_KEY); if (w) setListW(w); }
+new ResizeObserver(() => placeSplit()).observe(list);
+addEventListener('resize', placeSplit);
+split.addEventListener('pointerdown', e => {
+  if (e.button !== 0) return;
+  e.preventDefault(); split.setPointerCapture(e.pointerId); app.classList.add('splitting');
+  const x0 = e.clientX, w0 = colW();
+  const move = ev => setListW(w0 + ev.clientX - x0);
+  const up = () => { split.removeEventListener('pointermove', move); split.removeEventListener('pointerup', up); split.removeEventListener('pointercancel', up); app.classList.remove('splitting'); remember(SPLIT_KEY, String(Math.round(colW()))); };
+  split.addEventListener('pointermove', move); split.addEventListener('pointerup', up); split.addEventListener('pointercancel', up);
+});
+split.addEventListener('dblclick', () => { setListW(0); try { localStorage.removeItem(SPLIT_KEY); } catch (_) {  } });
+split.addEventListener('keydown', e => {
+  const d = e.key === 'ArrowLeft' ? -16 : e.key === 'ArrowRight' ? 16 : 0;
+  if (e.key === 'Home') { e.preventDefault(); split.dispatchEvent(new Event('dblclick')); return; }
+  if (!d) return;
+  e.preventDefault(); setListW(colW() + d); requestAnimationFrame(() => remember(SPLIT_KEY, String(Math.round(colW()))));
+});
+function setView(view, depth) { requestAnimationFrame(placeSplit); if (app.dataset.depth === 'pane' && depth === 'list') { app.classList.add('backing'); clearTimeout(backingT); backingT = setTimeout(() => app.classList.remove('backing'), 320); } app.dataset.view = view; app.dataset.depth = depth; if (view !== 'mail') document.documentElement.removeAttribute('data-boot-view'); }
 async function route() {
   const h = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
   closeRail();
@@ -1212,7 +1248,7 @@ function renderReader(m) {
           <button class="who-to" type="button" data-act="details" aria-expanded="false" title="Details">${esc(toLine)}<svg class="i" viewBox="0 0 20 20" fill="none" stroke="currentColor" aria-hidden="true"><path d="M6 8l4 4 4-4"/></svg></button>
         </div>
         <span class="who-r">
-          ${m.unsubscribe ? '<button class="linkbtn unsub" type="button" data-act="unsub" id="unsubnote">Unsubscribe</button>' : ''}
+          ${m.unsubscribe && !unsubbed.has(unsubKey(m.unsubscribe)) ? '<button class="linkbtn unsub" type="button" data-act="unsub" id="unsubnote">Unsubscribe</button>' : ''}
           <time datetime="${m.date}" title="${esc(full(m.date))}">${phone() ? when(m.date) : full(m.date)}</time>
           <button class="iconbtn desk-only" type="button" data-act="flag" title="Star (s)" aria-label="Star" aria-pressed="${m.flagged}">${icon('star')}</button>
           ${isDraft ? '' : `<button class="iconbtn desk-only" type="button" data-act="reply" title="Reply (r)" aria-label="Reply">${icon('reply')}</button>`}
@@ -1296,14 +1332,18 @@ async function unschedule() {
   catch (x) { toast(x.message); }
 }
 function cards(xs) {
-  return xs.map(x => `<div class="tm-w"><button class="tm" type="button" data-tm="${x.id}" aria-expanded="false">${avatar(x.from)}<span class="tm-t"><span class="tm-n">${esc(mine(x.from.addr) ? 'You' : nameOf(x.from))}</span><span class="tm-p">${esc(x.locked ? 'Encrypted message' : x.preview || '')}</span><span class="tm-to">${esc(toLineOf(x))}</span></span><time datetime="${x.date}" title="${esc(full(x.date))}">${phone() ? when(x.date) : full(x.date)}</time></button><div class="tm-b" id="tmb-${x.id}" hidden></div></div>`).join('');
+  return xs.map(x => `<div class="tm-w"><button class="tm" type="button" data-tm="${x.id}" aria-expanded="false">${avatar(x.from)}<span class="tm-t"><span class="tm-n">${esc(mine(x.from.addr) ? 'You' : nameOf(x.from))}</span><span class="tm-to">${esc(toLineOf(x))}</span></span><time datetime="${x.date}" title="${esc(full(x.date))}">${phone() ? when(x.date) : full(x.date)}</time></button><div class="tm-b" id="tmb-${x.id}" hidden></div></div>`).join('');
 }
 const toLineOf = r => { const rec = [...(r.to || []), ...(r.cc || [])]; return rec.length ? `to ${rec.map(p => (mine(p.addr) ? 'me' : nameOf(p))).join(', ')}` : ''; };
 async function openCard(id) {
   const b = $(`[data-tm="${id}"]`, pane), box = $(`#tmb-${id}`, pane); if (!b || !box) return;
   const open = b.getAttribute('aria-expanded') === 'true';
-  b.setAttribute('aria-expanded', String(!open)); box.hidden = open;
-  if (open || box.dataset.done) return;
+  if (open) {
+    $$('.tm[aria-expanded="true"]', pane).forEach(t => { t.setAttribute('aria-expanded', 'false'); const x = $(`#tmb-${t.dataset.tm}`, pane); if (x) x.hidden = true; });
+    return;
+  }
+  b.setAttribute('aria-expanded', 'true'); box.hidden = false;
+  if (box.dataset.done) return;
   let r; try { r = await mail.read(id, S.me); } catch (x) { box.innerHTML = `<p class="say bad">${esc(x.message)}</p>`; return; }
   box.dataset.done = '1';
   if (r.locked) { box.innerHTML = '<p class="plain">Encrypted. Load your key to read it.</p>'; return; }
@@ -2371,16 +2411,44 @@ async function blockNow() {
     await Promise.all(ids.map(id => api.update(id, { folder: from })));
   });
 }
+const unsubKey = u => u ? u.url || u.mailto || '' : '';
+const unsubbed = new Set();
+function mailtoParts(s) {
+  const [a, q = ''] = String(s).split('?'), p = new URLSearchParams(q.replace(/\+/g, '%2B'));
+  let to = a; try { to = decodeURIComponent(a); } catch {  }
+  return { to: to.split(',')[0].trim(), subject: p.get('subject') || 'unsubscribe', text: p.get('body') || 'unsubscribe' };
+}
 async function unsubscribe() {
-  const m = S.open, note = $('#unsubnote'); if (!m || !note) return;
-  const t = note.querySelector('.t'), b = note.querySelector('button');
-  b.disabled = true;
-  let r; try { r = await api.unsubscribe(m.id); } catch (x) { b.disabled = false; return toast(x.message); }
-  b.remove();
-  if (r.done) { t.textContent = 'Unsubscribed. Mail from this list should stop within a few days.'; return; }
-  if (r.url) { open(r.url, '_blank', 'noopener,noreferrer'); t.textContent = r.error ? `${r.error} Its page opened ${openedIn()} instead.` : `The list's page opened ${openedIn()}. Finish there.`; return; }
-  if (r.mailto) { const [to, q] = r.mailto.split('?'); startCompose('new'); Object.assign(S.compose, { to, subject: new URLSearchParams(q || '').get('subject') || 'unsubscribe' }); return; }
-  t.textContent = r.error || "This list didn't say how to leave it.";
+  const m = S.open, b = $('#unsubnote'), box = $('#actnote'), u = m?.unsubscribe; if (!m || !b || !u) return;
+  const say = (html, warn, link) => { if (S.open?.id === m.id && box) box.innerHTML = `<div class="note${warn ? ' warn' : ''}"><span class="t">${html}</span>${link ? `<a href="${esc(link)}" target="_blank" rel="noopener noreferrer">Open its page</a>` : ''}</div>`; };
+  const gone = () => { unsubbed.add(unsubKey(u)); if (S.open?.id === m.id) $('#unsubnote')?.remove(); };
+  if (!u.one_click && u.url) {
+    open(u.url, '_blank', 'noopener,noreferrer'); gone();
+    return say(`The list's page opened ${openedIn()}. Finish there.`);
+  }
+  b.disabled = true; b.setAttribute('aria-busy', 'true');
+  let r;
+  if (u.one_click) {
+    try { r = await api.unsubscribe(m.id); } catch (x) { b.disabled = false; b.removeAttribute('aria-busy'); return toast(x.message); }
+    if (r.done) { gone(); return say('Unsubscribed. Mail from this list should stop within a few days.'); }
+  } else r = { url: null, mailto: u.mailto };
+  const mt = r.mailto || u.mailto;
+  if (mt) {
+    const { to, subject, text } = mailtoParts(mt), me = S.me.primary_address || S.me.address;
+    const from = m.via_alias && S.me.aliases_send !== false ? m.via_alias : me;
+    try {
+      await mail.send({ from, to: [to], cc: [], bcc: [], names: {}, subject, text, files: [], lock: false, accept_keys: [] }, S.me);
+      gone(); return say(`Unsubscribed. foldoy sent the request to <b>${esc(to)}</b>. It's in Sent.`);
+    } catch (x) {
+      b.disabled = false; b.removeAttribute('aria-busy');
+      startCompose('new'); Object.assign(S.compose, { from, to, subject, text, dirty: true });
+      return toast(`${x.message} The unsubscribe request is ready to send.`);
+    }
+  }
+  b.disabled = false; b.removeAttribute('aria-busy');
+  const url = r.url || u.url;
+  if (url) return say(`${esc(r.error || "The list's server didn't take it.")} Leave on its page instead.`, true, url);
+  say(esc(r.error || "This list didn't say how to leave it."), true);
 }
 function refreshRow(id) {
   const r = $(`.row[data-id="${id}"]`, list), it = S.items.find(x => x.id === id);
@@ -3446,7 +3514,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.copy) return copy(t.dataset.copy);
   if (t.dataset.rmfile) { S.compose.files.splice(+t.dataset.rmfile, 1); return renderFiles(); }
   if (t.dataset.aliasAct) return aliasAct(t.dataset.aliasAct);
-  if (t.dataset.alias) { e.preventDefault(); const as = await api.aliases(); const a = as.find(x => x.address === t.dataset.alias); location.hash = a ? `#/aliases/${a.id}` : '#/aliases'; return; }
+  if (t.dataset.alias) { e.preventDefault(); const as = await api.aliases().catch(() => []); const a = as.find(x => x.address === t.dataset.alias); location.hash = a ? `#/aliases/${a.id}` : '#/aliases'; return; }
   if (t.dataset.domShow) { openDom = t.dataset.domShow; domNote = ''; return showSettings(); }
   if (t.dataset.domClose !== undefined) { openDom = null; return showSettings(); }
   if (t.dataset.domCheck) { t.setAttribute('aria-busy', 'true'); t.textContent = 'Checking…'; return checkDom(t.dataset.domCheck); }
@@ -3458,8 +3526,10 @@ document.addEventListener('click', async e => {
       t.closest('li')?.insertAdjacentHTML('afterend', `<li class="rmnote">${t.dataset.domDel ? 'Mail to every address at this domain stops arriving.' : 'Mail to this address stops arriving and its key is erased.'} Press again to remove it.</li>`);
       return;
     }
-    if (t.dataset.domDel) { await api.deleteDomain(t.dataset.domDel); if (openDom === t.dataset.domDel) openDom = null; toast('Domain removed.'); }
-    else { await api.deleteAddress(t.dataset.addrDel); S.me = await api.session(); toast('Address removed.'); }
+    try {
+      if (t.dataset.domDel) { await api.deleteDomain(t.dataset.domDel); if (openDom === t.dataset.domDel) openDom = null; toast('Domain removed.'); }
+      else { await api.deleteAddress(t.dataset.addrDel); S.me = await api.session(); toast('Address removed.'); }
+    } catch (x) { toast(x.message); }
     S.focusSec = t.dataset.domDel ? 'h-dom' : 'h-addr'; return showSettings();
   }
   if (t.dataset.revoke) {
@@ -3467,7 +3537,7 @@ document.addEventListener('click', async e => {
     catch (x) { toast(x.message); }
     S.focusSec = 'h-apps'; return drawSettings('apps');
   }
-  if (t.dataset.endsess) { const r = await api.endSession(t.dataset.endsess); if (r.signed_out) { location.href = '/login/'; return; } toast('Signed out'); return showSettings(); }
+  if (t.dataset.endsess) { let r; try { r = await api.endSession(t.dataset.endsess); } catch (x) { return toast(x.message); } if (r.signed_out) { location.href = '/login/'; return; } toast('Signed out'); return showSettings(); }
   if (t.dataset.set !== undefined) {
     if (t.dataset.set === 'imp-gmail' || t.dataset.set === 'imp-other') { impWho = t.dataset.set.slice(4); return drawSettings('import'); }
     if (t.dataset.set === 'exp-cancel' || t.dataset.set === 'exp-del') { try { S.exp = (await api.cancelExport()).job; S.expAt = Date.now(); } catch (x) { toast(x.message); } return drawSettings('export'); }
@@ -3575,7 +3645,7 @@ document.addEventListener('click', async e => {
   if (a === 'later') return laterMenu();
   if (a === 'lockon' || a === 'lockoff') { const c = S.compose; if (!c) return; read(); c.lock = a === 'lockon' ? { days: 7, hint: '', pw: pgp.newLockPassword() } : null; return showCompose(); }
   if (a === 'newalias') return composeAlias();
-  if (a === 'unsnooze') { const m = S.open; await api.unsnooze(m.id).catch(x => toast(x.message)); toast('Back where it was, unread'); S.key = ''; await refreshRail(); location.hash = S.back; return; }
+  if (a === 'unsnooze') { const m = S.open; try { await api.unsnooze(m.id); } catch (x) { return toast(x.message); } toast('Back where it was, unread'); S.key = ''; await refreshRail(); location.hash = S.back; return; }
   if (a === 'block') return blockAsk();
   if (a === 'blockok') return blockNow();
   if (a === 'blockno') { $('#actnote').innerHTML = ''; return; }
@@ -3592,7 +3662,7 @@ document.addEventListener('click', async e => {
   if (a === 'cc') { $('#rcc').hidden = false; $('#rbcc').hidden = false; t.hidden = true; $('#cform')?.classList.add('ccopen'); $('#ccc').focus(); return; }
   if (a === 'clear') { location.hash = '#/f/inbox'; return; }
   if (a === 'more' && S.q && S.next?.at != null) { const r = await idx.query(S.q, S.next.at); if (!r) return; S.items.push(...r.rows); S.next = r.found > S.items.length ? { at: S.items.length, total: r.found } : null; return renderList(); }
-  if (a === 'more') { const r = await api.messages(S.q ? { q: S.q, cursor: S.next } : { folder: S.folder, cursor: S.next }); const got = await mail.open(r.items);
+  if (a === 'more') { let r, got; try { r = await api.messages(S.q ? { q: S.q, cursor: S.next } : { folder: S.folder, cursor: S.next }); got = await mail.open(r.items); } catch (x) { return toast(x.message); }
     if (S.q) S.items.push(...got); else { S.raw = [...(S.raw || S.items), ...got]; S.items = groupThreads(S.raw); } S.next = r.next; return renderList(); }
   if (a === 'rail') return openRail();
   if (a === 'memenu') return;

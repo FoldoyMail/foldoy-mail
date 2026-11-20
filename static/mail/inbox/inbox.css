@@ -1961,7 +1961,7 @@ svg.i :is(path, circle, rect, line, polyline, polygon) { vector-effect: non-scal
   .reader .tm-t { display: flex; flex-direction: column; min-width: 0; }
   .reader .tm-n { overflow: hidden; text-overflow: ellipsis; font-size: 15px; line-height: 22px; font-weight: 600; }
   .reader :is(.tm-p, .tm-to) { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; line-height: 20px; color: var(--ink-2); }
-  .reader .tm-to { display: none; color: var(--ink-2); }
+  .reader .tm-to { display: block; color: var(--ink-2); }
   .reader .tm[aria-expanded="true"] .tm-p { display: none; }
   .reader .tm[aria-expanded="true"] .tm-to { display: block; }
   .reader .tm time { font-size: 12px; line-height: 22px; color: var(--ink-2); white-space: nowrap; }
