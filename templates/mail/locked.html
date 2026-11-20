@@ -11,12 +11,11 @@
 <link rel="stylesheet" href="{% static 'mail/shared/base.css' %}">
 <link rel="stylesheet" href="{% static 'mail/signup/signup.css' %}">
 <link rel="stylesheet" href="{% static 'mail/locked/locked.css' %}">
+<link rel="stylesheet" href="{% static 'css/shell.css' %}">
 </head>
 <body>
 <div class="xwrap">
-<header class="atop">
-  <a class="lockup" href="/" aria-label="foldoy, home"><svg class="logo" viewBox="0 0 100 100" aria-hidden="true"><path d="M14 47.75H76A31 31 0 0 0 14 47.75Z"/><path d="M24 52.25H86A31 31 0 0 1 24 52.25Z"/></svg><span class="word">foldoy</span></a>
-</header>
+{% include "_site_header.html" %}
 <main class="split">
   <div class="form-col">
     <form class="step" id="lockf" novalidate>
@@ -37,9 +36,7 @@
     </article>
   </div>
 </main>
-<footer class="afoot">
-  <a href="mailto:support@foldoy.com">support@foldoy.com</a>
-</footer>
+{% include "_site_footer.html" %}
 </div>
 <script type="module" src="{% static 'mail/locked/locked.js' %}"></script>
 </body>

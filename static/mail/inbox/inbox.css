@@ -636,9 +636,6 @@ html[data-theme="light"] .snz-pick input { color-scheme: light; }
 .limit b { color: var(--ink); }
 .limit .pill { margin-top: 12px; }
 .limit p { margin: 0; }
-.limit .lifts { margin: 10px 0 0; padding: 0; list-style: none; }
-.limit .lifts li, .set .kv .limit .lifts li { display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: baseline; gap: 2px 12px; min-height: 0; padding: 3px 0; box-shadow: none; font-size: inherit; }
-.limit .lifts li b, .set .kv .limit .lifts li b { min-width: 64px; margin: 0; font-weight: 600; text-align: left; }
 .limit .dim { margin-top: 10px; color: var(--ink-2); }
 .set .kv li.impnote .limit { margin-top: 0; }
 #cwall .limit { margin: 0 0 12px; }

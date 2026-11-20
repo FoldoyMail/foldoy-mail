@@ -86,11 +86,10 @@ const LIFTS = {
   domains: [p => p.custom_domains, n => `${n} custom domain${n === 1 ? '' : 's'}`, () => S.me.domain_limit || 0],
 };
 function wall(kind, sentence, redraw) {
-  const [get, says, now] = LIFTS[kind];
-  const plans = (needPlans(redraw) || []).filter(p => p.prices && get(p) > now());
-  const lifts = plans.map(p => `<li><b>${esc(p.name)}</b><span>${says(get(p))}, ${monthly(p)}</span></li>`).join('');
-  return `<div class="limit wall">${sentence ? `<p>${esc(sentence)}</p>` : ''}${lifts ? `<ul class="lifts">${lifts}</ul>` : ''}
-    ${!plans.length && S.plansList?.length ? '' : S.me.plans_open ? `<a class="pill light sm" href="${PLANS_URL}">See plans</a>` : '<p class="dim">Paid plans can\'t be bought yet.</p>'}</div>`;
+  const [get, , now] = LIFTS[kind];
+  const lifted = (needPlans(redraw) || []).some(p => p.prices && get(p) > now());
+  return `<div class="limit wall">${sentence ? `<p>${esc(sentence)}</p>` : ''}
+    ${!lifted && S.plansList?.length ? '' : S.me.plans_open ? `<a class="pill light sm" href="${PLANS_URL}">See plans</a>` : '<p class="dim">Paid plans can\'t be bought yet.</p>'}</div>`;
 }
 const DAY_LIMIT = /^That's (the most mail for a day|more recipients than)/;
 function limitWall(x, c) {
@@ -1657,7 +1656,7 @@ function showPending() {
     <div class="u-fill72 blank"><div class="state">
       ${isNew() ? '' : `<img class="art" src="${artFor('address', S.me.address.split('@')[1])}" alt="">`}
       ${S.me.waiting_for === 'plan' ? `<h2>Your mailbox opens with foldoy+.</h2>
-      <p><b>${esc(S.me.address)}</b> is held for you. @${esc(S.me.address.split('@')[1])} mailboxes come with foldoy+${(() => { const p = (needPlans(() => { if (app.dataset.view === 'pending') showPending(); }) || []).find(x => x.id === 'plus'); return p?.prices ? `, ${monthly(p)}` : ''; })()}.</p>
+      <p><b>${esc(S.me.address)}</b> is held for you. @${esc(S.me.address.split('@')[1])} mailboxes come with foldoy+.</p>
       <div class="acts"><a class="pill light md" href="${PLANS_URL}">Get foldoy+</a><a class="pill soft md" href="#/settings">Settings</a></div>` : `<h2>Your mailbox is being set up.</h2>
       <p><b>${esc(S.me.address)}</b> is yours.</p>
       <div class="acts"><a class="pill light md" href="#/settings">Settings</a></div>`}
@@ -2424,9 +2423,7 @@ function aliasPitch() {
   pane.innerHTML = `<div class="blank"><div class="state">
     <img class="art" src="/static/mail/shared/art/aliases.svg" alt="">
     <h2>A new address for every site. <span class="mute">Kill it when it spams you.</span></h2>
-    <ul class="kv plans">${(needPlans(() => { if (location.hash === '#/aliases' && !phone()) aliasPitch(); }) || []).map(p => `
-      <li class="${S.me.plan === p.id ? 'cur' : ''}"><span>${esc(p.name)}${p.prices ? `, ${monthly(p)}` : ''}</span><b>${p.aliases} alias${p.aliases === 1 ? '' : 'es'}${p.aliases_send ? '' : ', receive only'}</b></li>`).join('')}
-    </ul>
+    <p class="dim">${PLAN[S.me.plan] || 'Your plan'}: ${S.me.alias_limit} alias${S.me.alias_limit === 1 ? '' : 'es'}.</p>
     ${S.me.plan === 'polar' ? '' : S.me.plans_open ? `<div class="acts"><a class="pill light md" href="${PLANS_URL}">See plans</a></div>` : '<p class="dim">Paid plans can\'t be bought yet.</p>'}
   </div></div>`;
 }
