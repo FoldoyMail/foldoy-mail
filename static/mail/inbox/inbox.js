@@ -454,14 +454,15 @@ async function search(q0, gen) {
     }, Math.min(2000, 200 + found.size * 3));
   };
   const add = m => { if (!found.has(m.id) && keep(m)) { found.set(m.id, m); fresh = true; paint(); } };
-  const server = (async () => {
+  let server = null;
+  const ask = () => (server ||= (async () => {
     let cursor;
     for (let i = 0; i < 20 && live() && qt; i++) {
       const r = await api.messages({ q: qt, folder: 'all', cursor }).catch(() => null); if (!r) return;
       await mail.open(r.items); r.items.forEach(add);
       if (!(cursor = r.next)) return;
     }
-  })();
+  })());
   let next = 0;
   const slot = async () => { const now = Date.now(), at = Math.max(now, next); next = at + SEARCH_GAP; if (at > now) await new Promise(r => setTimeout(r, at - now)); };
   const worker = async () => {
@@ -486,8 +487,8 @@ async function search(q0, gen) {
       if (skip?.has(m.id)) { st.done++; continue; }
       const t = mail.textOf(m.id);
       if (t != null) { st.done++; if (match(t)) add(m); continue; }
-      if (!m.encrypted) { st.done++; if (match(head(m))) add(m); continue; }
-      if (m.opened && match(head(m))) add(m);
+      if (!m.encrypted) { st.done++; if (match(head(m))) add(m); ask(); continue; }
+      if (match(m.opened ? head(m) : fold([m.from, ...(m.to || [])].flatMap(p => (p ? [p.name, p.addr] : [])).join('\n')))) add(m);
       queue.push(m);
     }
     paint();
@@ -1218,7 +1219,7 @@ function renderReader(m) {
       ${m.unsigned && m.folder !== 'sent' && m.folder !== 'drafts' ? `<div class="note warn"><span class="t"><b>Not signed by ${esc(m.from.addr)}.</b> Mail from a foldoy address carries its sender's signature, and this one doesn't. It may not be from them.</span></div>` : ''}
       <div id="keynote"></div>
       <div id="imgnote">${m.html ? (() => { try { return imgNoteHtml(m, cleanHtml(m.html, { images: S.me.images !== false, cids: m.cids || {} }), S.me.images !== false); } catch { return ''; } })() : ''}</div>
-      ${m.html ? '<div class="htmlwrap"><iframe class="htmlmail" sandbox="allow-same-origin" title="Message"></iframe></div>'
+      ${m.html ? '<div class="htmlwrap"><iframe class="htmlmail" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" title="Message"></iframe></div>'
         : m.pending && !m.text ? '<div class="body skbody" aria-busy="true"><i style="width:82%"></i><i style="width:94%"></i><i style="width:61%"></i></div>'
           : `<div class="body">${quote(m.text || '')}</div>`}
       ${files.length ? `<div class="atts-h"><span>${files.length} attachment${files.length > 1 ? 's' : ''}, ${size(files.reduce((t, x) => t + (x.a.size || 0), 0))}</span>${files.length > 1 ? '<button class="linkbtn" type="button" data-act="dlall">Download all</button>' : ''}</div>
@@ -1243,6 +1244,7 @@ function renderReader(m) {
   else if (phone() || S.focusPane || document.activeElement === document.body || (!splitPane() && list.contains(document.activeElement))) { S.focusPane = false; $('#rsubj').focus({ preventScroll: true }); }
   if (m.pending) return;
   senderKey(m);
+  sentKeys(m);
   screenerNote(m);
 }
 const thumbUrls = new Map();
@@ -1293,10 +1295,10 @@ async function openCard(id) {
   if (r.locked) { box.innerHTML = '<p class="plain">Encrypted. Load your key to read it.</p>'; return; }
   const to = b.querySelector('.tm-to'); if (to && !to.textContent) to.textContent = toLineOf(r);
   if (r.html && !(r.text || '').trim()) {
-    box.innerHTML = '<div class="htmlwrap"><iframe class="htmlmail" sandbox="allow-same-origin" title="Message"></iframe></div>';
+    box.innerHTML = '<div class="htmlwrap"><iframe class="htmlmail" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" title="Message"></iframe></div>';
     const auto = S.me.images !== false;
     if (auto && r.remote_images_blocked && !r.armored) { try { const x = await mail.read(id, S.me, { images: true }); r.html = x.html; } catch {} }
-    mountHtml($('.htmlmail', box), cleanHtml(r.html, { images: auto, cids: await inlineImages(r) }), false);
+    mountHtml($('.htmlmail', box), cleanHtml(r.html, { images: auto, cids: await inlineImages(r) }), false, `card:${id}`);
   } else box.innerHTML = `<div class="body">${quote(r.text || '')}</div>`;
 }
 const snzWhen = iso => {
@@ -1311,11 +1313,34 @@ const ARRIVAL = {
   plain: `<span>Not encrypted. Stored as it arrived.</span>`,
   encrypted: `<span>${icon('key')}Encrypted</span>`,
 };
+const sentE2E = new Map();
 function sentSec(m) {
   const rec = [...(m.to || []), ...(m.cc || [])].map(p => p.addr).filter(Boolean);
-  const outside = rec.filter(a => !FOLDOY.test(a));
+  const sure = sentE2E.get(m.id);
+  const outside = rec.filter(a => !FOLDOY.test(a) && !sure?.has(a.toLowerCase()));
   if (!rec.length || !outside.length) return { icon: 'lock', cls: 'on', label: 'End-to-end encrypted' };
   return { icon: 'lock', cls: '', label: outside.length === rec.length ? 'Sent readable to outside addresses. Your copy is encrypted.' : 'End-to-end to foldoy addresses, readable to the others. Your copy is encrypted.' };
+}
+async function sentKeys(m) {
+  if ((m.folder !== 'sent' && m.folder !== 'scheduled') || !m.armored || sentE2E.has(m.id)) return;
+  const out = [...(m.to || []), ...(m.cc || [])].map(p => (p.addr || '').toLowerCase()).filter(a => a && !FOLDOY.test(a));
+  if (!out.length) return;
+  let to, k;
+  try {
+    to = await pgp.encryptedTo(m.armored);
+    const own = [...(S.me.keys || []).map(x => x.public_key), S.me.key?.public_key].filter(Boolean);
+    for (const ids of await Promise.all(own.map(x => pgp.keyIds(x).catch(() => [])))) for (const id of ids) to.delete(id);
+    if (!to.size) return;
+    k = await mail.classify(out);
+  } catch { return; }
+  const sure = new Set();
+  for (const x of k.e2e) { try { if ((await pgp.keyIds(x.public_key)).some(id => to.has(id))) sure.add(x.addr); } catch {} }
+  if (!sure.size) return;
+  sentE2E.set(m.id, sure);
+  if (S.open?.id !== m.id) return;
+  const sec = sentSec(m), lock = $('.who-l1 .sec', pane), a = $('#arrival', pane);
+  if (lock) { lock.className = `sec ${sec.cls}`; lock.dataset.tip = sec.label; lock.setAttribute('aria-label', sec.label); }
+  if (a) a.textContent = sec.label;
 }
 function secOf(m) {
   if (m.folder === 'sent' || m.folder === 'scheduled') return sentSec(m);
@@ -1474,9 +1499,9 @@ async function showImages() {
   showHtml(m, true);
 }
 const frameH = new Map();
-function mountHtml(fr, { html, css = '', styled = false }, storeOrder) {
+function mountHtml(fr, { html, css = '', styled = false }, storeOrder, key = S.open?.id) {
   const paper = styled && !storeOrder, theme = paper ? 'light' : (document.documentElement.dataset.theme === 'light' ? 'light' : 'dark');
-  const key = S.open?.id, known = frameH.get(key);
+  const known = frameH.get(key);
   fr.parentElement.classList.toggle('paper', paper);
   if (known) fr.style.height = `${known}px`;
   fr.parentElement.classList.add('loading');
@@ -1509,7 +1534,7 @@ function mountHtml(fr, { html, css = '', styled = false }, storeOrder) {
     }
   };
   fr._place = place;
-  fr.onload = () => { if (!storeOrder) foldQuote(fr); edge(); place(); fr.parentElement.classList.remove('loading'); reveal(); new ResizeObserver(place).observe(fr.parentElement); };
+  fr.onload = () => { if (!storeOrder) foldQuote(fr); edge(); place(); fr.parentElement.classList.remove('loading'); reveal(); if (!fr._ro) { fr._ro = new ResizeObserver(() => fr._place()); fr._ro.observe(fr.parentElement); } };
 }
 function foldQuote(fr) {
   const wrap = fr.parentElement, was = wrap.nextElementSibling;

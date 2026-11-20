@@ -280,6 +280,8 @@ export function toMime({ text, html }) {
 
 const fmt = f => f.toUpperCase().replace(/(.{4})/g, '$1 ').trim();
 export async function fingerprint(public_key) { const o = await load(); return fmt((await o.readKey({ armoredKey: public_key })).getFingerprint()); }
+export async function keyIds(public_key) { const o = await load(); return (await o.readKey({ armoredKey: public_key })).getKeyIDs().map(k => k.toHex()); }
+export async function encryptedTo(armored) { const o = await load(); return new Set((await o.readMessage({ armoredMessage: armored })).getEncryptionKeyIDs().map(k => k.toHex())); }
 export async function checkKey(public_key, address) {
   const o = await load();
   const k = await o.readKey({ armoredKey: public_key });
