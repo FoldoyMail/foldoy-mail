@@ -13,13 +13,6 @@ const COUNTED = ['drafts', 'starred', 'snoozed', 'scheduled', 'screener'];
 const ORDERS = 'orders@foldoy.com';
 const DEPOSIT_URL = siteUrl('/account/deposit/');
 const goUrl = () => (S.me.deposits_open ? DEPOSIT_URL : PLANS_URL);
-function quickRow() {
-  if (!phone() || S.folder !== 'inbox' || !S.me) return '';
-  const free = S.me.plan === 'free';
-  return `<nav class="qa" aria-label="Balance">
-    <a class="qa-b" href="${free ? goUrl() : DEPOSIT_URL}">${icon('addfunds')}<span>${free ? 'Go premium' : 'Add funds'}</span></a>
-  </nav>`;
-}
 const SEES_URL = location.hostname.startsWith('mail.') ? `https://${location.hostname.slice(5)}/what-we-can-see/` : '/what-we-can-see/';
 const PLAN = { free: 'Free', plus: 'foldoy+', polar: 'Polar' };
 const usd = n => `$${Number(n || 0).toFixed(2)}`;
@@ -114,7 +107,7 @@ const knownName = a => {
   return names.get(a);
 };
 const nameOf = p => p.name || knownName(p.addr) || p.addr;
-const tone = p => { const a = (p?.addr || '').toLowerCase(); if (a === 'orders@foldoy.com') return 'house'; let h = 0; for (const c of a) h = (h * 31 + c.charCodeAt(0)) >>> 0; return 't' + (h % 6); };
+const tone = p => { const a = (p?.addr || '').toLowerCase(); if (a === 'orders@foldoy.com') return 'house'; let h = 0; for (const c of a) h = (h * 31 + c.charCodeAt(0)) >>> 0; return 't' + (h % 8); };
 const MARK = '<svg class="mk" viewBox="0 0 100 100" aria-hidden="true"><path d="M14 47.75H76A31 31 0 0 0 14 47.75Z"/><path d="M24 52.25H86A31 31 0 0 1 24 52.25Z"/></svg>';
 const avatar = (p, cls = '') => `<span class="av ${tone(p)}${cls}" aria-hidden="true">${tone(p) === 'house' ? MARK : esc(initials(p))}${p?.brand && tone(p) !== 'house' ? `<img class="logo" src="/mail/api/logo?d=${encodeURIComponent(p.brand)}&amp;s=${encodeURIComponent(p.brand_sig || '')}" alt="" loading="lazy" decoding="async">` : ''}</span>`;
 document.addEventListener('error', e => { if (e.target?.classList?.contains('logo')) e.target.remove(); }, true);
@@ -342,6 +335,7 @@ function renderRail() {
   $('.rail-x').innerHTML = icon('close');
   const f = !S.q && S.folders.find(x => x.id === S.folder), c = list.querySelector('.lh .cnt.fc');
   if (c) c.textContent = f && f.unread ? `${f.unread} unread` : '';
+  const pc = list.querySelector('.ptitle h2'); if (pc) pc.innerHTML = `${esc(folderName())}${f && f.unread ? ` <span class="pc">${f.unread}</span>` : ''}`;
   const uf = list.querySelector('.lh .ufilter'), un = f ? f.unread : 0;
   if (uf) { let ub = uf.querySelector('.ub'); if (un && !ub) { ub = document.createElement('span'); ub.className = 'ub'; uf.append(ub); } if (ub) { if (un) ub.textContent = un > 99 ? '99+' : String(un); else ub.remove(); } }
 }
@@ -541,12 +535,30 @@ function threadNames(m) {
 const PLACE_NAMES = { screener: 'Screener', snoozed: 'Snoozed', scheduled: 'Scheduled', starred: 'Starred', all: 'All mail' };
 function folderName() { return S.q ? 'Search' : (S.folders.find(f => f.id === S.folder) || { name: PLACE_NAMES[S.folder] || 'Inbox' }).name; }
 const ltotText = () => S.items.length ? `1-${S.items.length} of ${S.next?.total || (S.next ? `${S.items.length}+` : S.items.length)}` : '';
+function chipsHtml(f) {
+  if (S.q) return '';
+  const ordered = S.folders.filter(x => x.role !== 'admin' && x.role !== 'all').sort((a, b) => (RAIL_ORDER.indexOf(a.role) + 1 || 99) - (RAIL_ORDER.indexOf(b.role) + 1 || 99));
+  const uf = (S.items.length || S.unreadOnly) && !['drafts', 'sent', 'scheduled'].includes(S.folder)
+    ? `<button class="fchip uf" type="button" data-act="unreadonly" aria-pressed="${S.unreadOnly}">Unread</button>` : '';
+  return `<nav class="fchips" aria-label="Folders">${uf}${ordered.map(x => {
+    const n = COUNTED.includes(x.role) ? x.total : x.role === 'sent' ? 0 : x.unread;
+    return `<a class="fchip" href="#/f/${x.id}"${x.id === S.folder ? ' aria-current="page"' : ''}>${esc(x.name)}${n ? `<span class="fn">${n > 99 ? '99+' : n}</span>` : ''}</a>`;
+  }).join('')}</nav>`;
+}
+function bigTitle(f) {
+  if (S.q) return '';
+  return `<div class="ptitle"><h2>${esc(folderName())}${f && f.unread ? ` <span class="pc">${f.unread}</span>` : ''}</h2>
+    ${S.me.plan === 'free' && S.me.plans_open ? `<a class="pupg" href="${PLANS_URL}">Upgrade</a>` : ''}
+    <button class="iconbtn refresh" type="button" data-act="refresh" aria-label="Check for new mail"${S.refreshing ? ' aria-busy="true"' : ''}>${icon('refresh')}</button>
+    <button class="me-b" type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="Your account">${avatar({ addr: S.me.address, name: S.me.display })}</button></div>`;
+}
 function renderList() {
   const first = !!list.querySelector('.sk-rows');
   const f = S.folders.find(x => x.id === S.folder);
   const locked = S.me.key?.own && !pgp.ownLoaded() && S.items.some(m => m.locked);
   const ctl = !S.q && (S.items.length || S.unreadOnly);
   const q0 = $('#q'), typing = q0 && document.activeElement === q0 ? { v: q0.value, a: q0.selectionStart, b: q0.selectionEnd } : null;
+  if (!S.q && !typing) list.classList.remove('sopen');
   list.innerHTML = `
     ${S.picked.size ? listBar() : `<div class="lh mh">
       <button class="menu-btn" type="button" data-act="rail" aria-label="Folders and settings">${icon('menu')}</button>
@@ -558,6 +570,7 @@ function renderList() {
       ${ctl && !phone() ? `<button class="iconbtn panemode" type="button" data-act="panemode" aria-label="${splitPane() ? 'Open mail over the list' : 'Open mail beside the list'}" aria-pressed="${splitPane()}"><svg class="i" viewBox="0 0 20 20" fill="none" stroke="currentColor" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="2" fill="none"/>${splitPane() ? '<path d="M9 4v12"/>' : '<path d="M3 8h14"/>'}</svg></button>` : ''}
       ${ctl && !['drafts', 'sent', 'scheduled'].includes(S.folder) ? `<span class="sp"></span><button class="ufilter" type="button" data-act="unreadonly" aria-pressed="${S.unreadOnly}">Unread${f && f.unread ? `<span class="ub">${f.unread > 99 ? '99+' : f.unread}</span>` : ''}</button>` : ''}
       ${look() && ctl ? `<span class="ltot">${ltotText()}</span>` : ''}
+      <button class="iconbtn sbtn" type="button" data-act="opensearch" aria-label="Search mail">${icon('search')}</button>
     </div>`}
     <form class="field search" role="search" id="searchf">
       <button class="menu-btn s-menu" type="button" data-act="rail" aria-label="Folders and settings">${icon('menu')}</button>
@@ -566,8 +579,9 @@ function renderList() {
       ${S.q ? `<button class="clear" type="button" data-act="clear" aria-label="Clear search">${icon('close')}</button>` : '<kbd aria-hidden="true">/</kbd>'}
       <button class="me-b" type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="Your account" title="${esc(S.me.address)}">${avatar({ addr: S.me.address, name: S.me.display })}</button>
     </form>
+    ${chipsHtml(f)}
     ${locked ? `<div class="lockbar"><span>${icon('key')}Your own key isn't loaded</span><button class="pill soft sm" type="button" data-act="unlock">Load</button></div>` : ''}
-    <div class="rows" data-k="${esc(S.key)}" role="list" ${S.picked.size ? 'data-picking="1"' : ''}>${S.q ? '' : quickRow() + rcNoticeHtml()}${rowsInner()}</div>`;
+    <div class="rows" data-k="${esc(S.key)}" role="list" ${S.picked.size ? 'data-picking="1"' : ''}>${S.q ? '' : bigTitle(f) + rcNoticeHtml()}${rowsInner()}</div>`;
   $('#searchf').addEventListener('submit', e => {
     e.preventDefault(); const v = $('#q').value.trim(), h = v ? `#/s/${encodeURIComponent(v)}` : '#/f/inbox';
     if (h === location.hash && S.q === v) { list.querySelector('.row')?.focus({ preventScroll: true }); return; }
@@ -575,7 +589,7 @@ function renderList() {
   });
   $('#q').addEventListener('input', e => { qSuggest(); if (!idx.complete()) return; clearTimeout(S.typeT); S.typeT = setTimeout(() => typed(e.target.value), 90); });
   $('#q').addEventListener('focus', qSuggest);
-  $('#q').addEventListener('blur', e => { if (!e.relatedTarget?.closest?.('.qsug')) qSuggestOff(); });
+  $('#q').addEventListener('blur', e => { if (!e.relatedTarget?.closest?.('.qsug')) qSuggestOff(); if (!e.target.value && !S.q) list.classList.remove('sopen'); });
   $('#q').addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); qSuggestOff(); $('#q').value = ''; $('#q').blur(); if (S.q) location.hash = '#/f/inbox'; } if (e.key === 'ArrowDown') { e.preventDefault(); $('.row')?.focus(); } });
   if (typing) { const q = $('#q'); q.value = typing.v; q.focus({ preventScroll: true }); try { q.setSelectionRange(typing.a, typing.b); } catch (_) {  } }
   if (first) { const r = list.querySelector('.rows[data-k]'); r?.classList.add('reveal'); setTimeout(() => r?.classList.remove('reveal'), 900); }
@@ -3538,6 +3552,7 @@ document.addEventListener('click', async e => {
     setMode = t.dataset.set || null; return showSettings();
   }
   const a = t.dataset.act;
+  if (a === 'opensearch') { list.classList.add('sopen'); $('#q')?.focus(); return; }
   if (a === 'compose') return startCompose('new');
   if (a === 'reply' || a === 'replyall' || a === 'forward') return startCompose(a, S.open);
   if (a === 'editdraft') return startCompose('draft', S.open);

@@ -688,7 +688,7 @@
   .set .form { padding: 6px 0 10px; }
 }
 
-.av:is(.t0, .t1, .t2, .t3, .t4, .t5), :root[data-avatars] .av:is(.t0, .t1, .t2, .t3, .t4, .t5) { background: color-mix(in srgb, var(--ink) 13%, transparent); color: var(--ink-2); box-shadow: none; }
+.av:is(.t0, .t1, .t2, .t3, .t4, .t5, .t6, .t7), :root[data-avatars] .av:is(.t0, .t1, .t2, .t3, .t4, .t5, .t6, .t7) { background: color-mix(in srgb, var(--ink) 13%, transparent); color: var(--ink-2); box-shadow: none; }
 .me-b .av, .ac-id .ac-av, .acct .me-a .me-av, :root[data-avatars] :is(.me-b, .ac-id, .acct .me-a) .av { background: color-mix(in srgb, var(--ink) 13%, transparent); color: var(--ink); box-shadow: none; }
 
 @media (min-width: 1024px), (hover: hover) {
