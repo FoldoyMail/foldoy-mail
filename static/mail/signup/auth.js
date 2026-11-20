@@ -6,9 +6,6 @@ const pathMode = () => (/\/signup\/?$/.test(location.pathname) ? 'signup' : 'log
 if (location.hash === '#signup' || new URLSearchParams(location.search).has('signup')) history.replaceState(null, '', '/signup/');
 const st = { mode: pathMode(), name: '', domain: FREE_DOMAIN, ok: false };
 const INVITE = new URLSearchParams(location.search).get('invite') || '';
-let powJob = null;
-const startPow = () => (powJob = powJob || api.pow().then(c => solve(c.challenge, c.bits)).catch(() => (powJob = null)));
-if (st.mode === 'signup') startPow();
 const PAID = document.body.dataset.paid === '1';
 const R = { email: '', code: '' };
 const EMAIL_RESET = document.body.dataset.reset !== '0' || DEMO;
@@ -50,7 +47,7 @@ function mode(m) {
   for (const d of document.querySelectorAll('details.sh-menu[open]')) d.open = false;
   $('#addrf').hidden = up; $('#picker').hidden = !up;
   $('#avail').hidden = !up; $('#sugg').hidden = !up;
-  $('#pwrule').hidden = !up; $('#recwrap').hidden = !up; $('#terms').hidden = !up;
+  $('#pwrule').hidden = !up; $('#recwrap').hidden = !up; $('#terms').hidden = !up; $('#human').hidden = !up;
   if ($('#forgotl')) $('#forgotl').hidden = up;
   if ($('#holdnote')) $('#holdnote').hidden = !up;
   pw.autocomplete = up ? 'new-password' : 'current-password';
@@ -95,6 +92,30 @@ async function check() {
 sugg.addEventListener('click', e => { const b = e.target.closest('button'); if (b) { pk.set(b.dataset.n, b.dataset.d); pk.focus(); } });
 pw.addEventListener('input', () => { pw.closest('.field').classList.remove('bad'); rule.classList.remove('bad'); rule.classList.toggle('ok', !account.passwordProblem(pw.value)); rule.lastChild.textContent = '12 characters or more'; });
 
+const human = $('#human'), H = { pow: null, at: 0, job: null };
+const POW_FRESH = 25 * 60 * 1000;
+function humanState(state, text) {
+  human.dataset.state = state; human.querySelector('.ht').textContent = text;
+  human.setAttribute('aria-busy', state === 'work' ? 'true' : 'false');
+  human.disabled = state === 'work' || state === 'done';
+}
+function verify() {
+  if (H.job) return H.job;
+  humanState('work', 'Verifying…');
+  H.job = api.pow().then(c => solve(c.challenge, c.bits))
+    .then(p => { H.pow = p; H.at = Date.now(); humanState('done', 'Verified'); return p; })
+    .catch(() => { if (DEMO) { humanState('done', 'Verified'); return null; } humanState('bad', 'Couldn’t verify. Try again'); return null; })
+    .finally(() => { H.job = null; });
+  return H.job;
+}
+human.addEventListener('click', () => { err.textContent = ''; verify(); });
+const verified = () => human.dataset.state === 'done' || human.dataset.state === 'work';
+async function takePow() {
+  if (H.job) await H.job;
+  if (!H.pow || Date.now() - H.at > POW_FRESH) { H.pow = null; await verify(); }
+  const p = H.pow; H.pow = null; return p;
+}
+
 const loginOf = v => { v = (v || '').trim().toLowerCase(); return v && !v.includes('@') && !/^\d+$/.test(v) ? `${v}@${FREE_DOMAIN}` : v; };
 async function logIn(b, errEl, code) {
   const login = loginOf($('#addr').value.trim()), password = pw.value;
@@ -114,11 +135,13 @@ async function signUp() {
   if (why) { rule.classList.remove('ok'); rule.classList.add('bad'); rule.lastChild.textContent = why.startsWith('Use 12') ? '12 characters or more' : why; pw.closest('.field').classList.add('bad'); pw.focus(); return; }
   const rec = $('#rec').value.trim(), rs = $('#recsay');
   if (rec && (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(rec) || FOLDOY.test(rec))) { rs.className = 'say bad'; rs.textContent = FOLDOY.test(rec) ? 'Use an address outside foldoy.' : 'Check the email address.'; $('#rec').focus(); return; }
+  if (!verified()) { human.dataset.state = 'bad'; human.querySelector('.ht').textContent = 'Verify you’re human'; err.textContent = 'Press Verify first.'; human.focus(); return; }
   const b = $('#go'); b.setAttribute('aria-busy', 'true'); b.textContent = 'Making your key…';
+  let sent = false;
   try {
     const address = `${st.name}@${st.domain}`;
     const k = await account.makeKey(address, pw.value);
-    const pow = await startPow();
+    const pow = await takePow(); sent = true;
     const s = await api.signup({ name: st.name, domain: st.domain, auth: k.auth, kdf: k.kdf, key: k.key, recovery: k.recovery,
       privacy_plus: false, recovery_email: rec || null, accept: true, pow, ...(INVITE ? { invite: INVITE } : {}) });
     await pgp.remember(s.address);
@@ -126,7 +149,10 @@ async function signUp() {
     pw.value = '';
     if (s.recovery?.set && $('#rc')) return showCode(k.code, s.address);
     location.replace(NEXT);
-  } catch (x) { err.textContent = x.message; }
+  } catch (x) {
+    err.textContent = x.message;
+    if (sent && human.dataset.state === 'done') verify();
+  }
   finally { b.removeAttribute('aria-busy'); b.textContent = 'Create account'; }
 }
 form.addEventListener('submit', e => {

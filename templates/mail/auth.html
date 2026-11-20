@@ -20,7 +20,7 @@
 <link rel="modulepreload" href="{% static 'mail/shared/vendor/openpgp.min.js' %}">
 <link rel="preload" as="script" href="/static/mail/shared/vendor/argon2.umd.min.js">
 </head>
-<body data-home="{{ home_host }}" data-mode="{{ mode }}" data-paid="{% if paid_open %}1{% else %}0{% endif %}" data-reset="{% if reset_open %}1{% else %}0{% endif %}">
+<body data-home="{{ home_host }}" data-mode="{{ mode }}" data-pow-worker="{% static 'mail/shared/pow-worker.js' %}" data-paid="{% if paid_open %}1{% else %}0{% endif %}" data-reset="{% if reset_open %}1{% else %}0{% endif %}">
 <div class="xwrap">
 <main class="split">
   <div class="form-col">
@@ -40,6 +40,7 @@
           <div class="field"><input id="rec" type="email" autocomplete="email" inputmode="email" placeholder="An address outside foldoy"></div>
           <p class="say" id="recsay" aria-live="polite"></p>
         </div>
+        <button class="human" type="button" id="human" aria-live="polite"{% if mode != "signup" %} hidden{% endif %}><span class="box" aria-hidden="true"><svg class="i" viewBox="0 0 20 20"><path d="M4.5 10.5l3.5 3.5 7.5-8"/></svg></span><span class="ht">Verify you're human</span><span class="hw">Proof of work</span></button>
         <p class="say bad" id="err" aria-live="assertive"></p>
       </div>
       {% if hold_note %}<p class="termsline" id="holdnote"{% if mode != "signup" %} hidden{% endif %}>Over a VPN or Tor, a new account stays locked until you add funds or we approve it, which you can ask for {{ hold_hours }} hours after signing up.</p>{% endif %}
