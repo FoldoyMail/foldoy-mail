@@ -1,0 +1,26 @@
+@font-face { font-family: Geist; src: url("../shared/fonts/Geist-var.woff2") format("woff2"); font-weight: 100 900; }
+:root { --ink: #F5F5F7; --ink-2: #A3A3AA; --mute: #6D6D74; --hair: rgba(255, 255, 255, .085); --ring: rgba(255, 255, 255, .14); --well: #111113; color-scheme: dark; }
+:root[data-theme="light"] { --ink: #0B0B0C; --ink-2: #5C5C64; --mute: #8D8D95; --hair: rgba(0, 0, 0, .075); --ring: rgba(0, 0, 0, .12); --well: #F4F4F5; color-scheme: light; }
+html, body { margin: 0; background: transparent; color: var(--ink); font: 400 16px/1.7 Geist, system-ui, sans-serif; letter-spacing: -.006em; -webkit-font-smoothing: antialiased; }
+a { color: var(--ink); text-underline-offset: 3px; }
+img { max-width: 100%; height: auto; }
+:where(body) { overflow-wrap: anywhere; overflow-x: auto; }
+.fo { width: 100%; border-collapse: collapse; } .fo td { padding: 0; }
+.fo-k { margin: 0 0 4px; color: var(--mute); font-size: 13px; font-variant-numeric: tabular-nums; }
+h1 { margin: 0 0 22px; font-size: 20px; line-height: 1.25; font-weight: 650; letter-spacing: -.025em; }
+.fo-l { margin: 0 0 8px; color: var(--ink-2); font-size: 13px; font-weight: 500; }
+.fo-code { margin: 0; padding: 18px 120px 18px 20px; border-radius: 12px; background: var(--well); box-shadow: inset 0 0 0 1px var(--hair);
+  font-size: 22px; font-weight: 600; letter-spacing: .06em; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fo-how { margin: 12px 1px 28px; color: var(--ink-2); font-size: 14px; }
+.fo-rows { width: 100%; border-collapse: collapse; border-top: 1px solid var(--hair); }
+.fo-rows td { padding: 11px 1px; font-size: 14px; color: var(--ink-2); border-bottom: 1px solid var(--hair); }
+.fo-rows td.r { text-align: right; color: var(--ink); font-weight: 550; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fo-rows tr:last-child td { color: var(--ink); font-weight: 550; border-bottom: 0; }
+:where(html.paper), :where(html.paper) body { background: #FFFFFF; color: #1F1F22; color-scheme: light; font: 400 14px/1.5 Geist, system-ui, sans-serif; letter-spacing: 0; }
+:where(html.paper) body { padding: 20px 24px 24px; overflow-x: auto; }
+:where(html.paper) a { color: inherit; }
+@media (max-width: 520px) { :where(html.paper) body { padding: 12px; } }
+@media (max-width: 420px) { .fo-code { font-size: clamp(17px, 5.4vw, 21px); padding: 16px 16px 68px; } h1 { font-size: 21px; } body { font-size: 17px; line-height: 1.62; } .fo-rows td { font-size: 15px; } }
+:where(html:not(.paper)) :where(td, th) { padding: 2px 18px 2px 0; vertical-align: top; text-align: left; }
+:where(html:not(.paper)) :where(blockquote) { margin: 6px 0; padding: 0 0 0 12px; border-left: 2px solid var(--ring); color: var(--ink-2); }
+:where(html:not(.paper)) :where([data-fq]:not(blockquote)) { color: var(--ink-2); }

@@ -1,0 +1,46 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>An encrypted message · foldoy</title>
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="{% static 'mail/shared/favicon.svg' %}" type="image/svg+xml">
+<link rel="stylesheet" href="{% static 'mail/shared/base.css' %}">
+<link rel="stylesheet" href="{% static 'mail/signup/signup.css' %}">
+<link rel="stylesheet" href="{% static 'mail/locked/locked.css' %}">
+</head>
+<body>
+<div class="xwrap">
+<header class="atop">
+  <a class="lockup" href="/" aria-label="foldoy, home"><svg class="logo" viewBox="0 0 100 100" aria-hidden="true"><path d="M14 47.75H76A31 31 0 0 0 14 47.75Z"/><path d="M24 52.25H86A31 31 0 0 1 24 52.25Z"/></svg><span class="word">foldoy</span></a>
+</header>
+<main class="split">
+  <div class="form-col">
+    <form class="step" id="lockf" novalidate>
+      <h1 class="hl" tabindex="-1" id="lockh">An encrypted message</h1>
+      <p class="lead" id="lockfrom">Opening…</p>
+      <div class="fields" id="lockfields" hidden>
+        <label class="label" for="lockpw">Password</label>
+        <div class="field"><input id="lockpw" type="password" autocomplete="off" spellcheck="false"><button class="end" type="button" id="lockshow">Show</button></div>
+        <p class="say" id="lockhint"></p>
+        <p class="say bad" id="lockerr" aria-live="assertive"></p>
+      </div>
+      <div class="acts" id="lockacts" hidden><button class="pill light" type="submit" id="lockgo">Open</button></div>
+    </form>
+    <article class="locked-msg" id="lockmsg" hidden>
+      <h1 class="hl" id="locksubj" tabindex="-1"></h1>
+      <p class="lead" id="lockmeta"></p>
+      <div class="locked-body" id="lockbody"></div>
+    </article>
+  </div>
+</main>
+<footer class="afoot">
+  <a href="mailto:support@foldoy.com">support@foldoy.com</a>
+</footer>
+</div>
+<script type="module" src="{% static 'mail/locked/locked.js' %}"></script>
+</body>
+</html>

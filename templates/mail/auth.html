@@ -1,0 +1,173 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="foldoy-free-domain" content="{{ free_mail_domain }}">
+<meta name="foldoy-free-domains" content="{{ free_mail_domains|join:',' }}">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
+<title>{% if mode == "signup" %}Sign up{% else %}Log in{% endif %} · foldoy</title>
+<meta name="theme-color" content="#101010">
+{% include "mail/_app_head.html" %}
+<link rel="icon" href="{% static 'mail/shared/favicon.svg' %}" type="image/svg+xml">
+<link rel="preload" href="{% static 'mail/shared/fonts/Geist-var.woff2' %}" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="{% static 'mail/shared/base.css' %}">
+<link rel="stylesheet" href="{% static 'mail/signup/signup.css' %}">
+<link rel="stylesheet" href="{% static 'mail/signup-inline.css' %}">
+<link rel="modulepreload" href="{% static 'mail/shared/api.js' %}">
+<link rel="modulepreload" href="{% static 'mail/shared/ui.js' %}">
+<link rel="modulepreload" href="{% static 'mail/shared/pgp.js' %}">
+<link rel="modulepreload" href="{% static 'mail/shared/sample-data.js' %}">
+<link rel="modulepreload" href="{% static 'mail/shared/vendor/openpgp.min.js' %}">
+<link rel="preload" as="script" href="/static/mail/shared/vendor/argon2.umd.min.js">
+</head>
+<body data-home="{{ home_host }}" data-mode="{{ mode }}" data-paid="{% if paid_open %}1{% else %}0{% endif %}" data-reset="{% if reset_open %}1{% else %}0{% endif %}">
+<div class="xwrap">
+<main class="split">
+  <div class="form-col">
+    <form class="step" id="auth" novalidate>
+      <h1 class="hl" tabindex="-1" id="authh">{% if mode == "signup" %}Create your account{% else %}Log in to foldoy{% endif %}</h1>
+      <div class="fields">
+        <label class="label" for="addr" id="addrl">Address</label>
+        <div class="field" id="addrf"{% if mode == "signup" %} hidden{% endif %}><input id="addr" type="email" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="you@foldoy.com"></div>
+        <div id="picker" class="pre"{% if mode != "signup" %} hidden{% endif %}><div class="field pick-field"><input aria-label="Name" placeholder="yourname" size="8" disabled><button class="dom" type="button" tabindex="-1"><span class="dv">@foldoy.com</span><span class="chev"><svg viewBox="0 0 14 14"><path d="M3 5.5L7 9.5l4-4"/></svg></span></button></div></div>
+        <p class="say" id="avail" aria-live="polite"{% if mode != "signup" %} hidden{% endif %}></p>
+        <div class="sugg" id="sugg"{% if mode != "signup" %} hidden{% endif %}></div>
+        <label class="label is-f5c1b348" for="pw">Password</label>
+        <div class="field"><input id="pw" type="password" autocomplete="{% if mode == "signup" %}new-password{% else %}current-password{% endif %}"><button class="end" type="button" data-show="pw">Show</button></div>
+        <p class="rule" id="pwrule"{% if mode != "signup" %} hidden{% endif %}><svg class="i" viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 10.5l3.5 3.5 7.5-8"/></svg><span>12 characters or more</span></p>
+        <div id="recwrap"{% if mode != "signup" %} hidden{% endif %}>
+          <label class="label is-f5c1b348" for="rec">Recovery email <span>optional</span></label>
+          <div class="field"><input id="rec" type="email" autocomplete="email" inputmode="email" placeholder="An address outside foldoy"></div>
+          <p class="say" id="recsay" aria-live="polite"></p>
+        </div>
+        <p class="say bad" id="err" aria-live="assertive"></p>
+      </div>
+      {% if hold_note %}<p class="termsline" id="holdnote"{% if mode != "signup" %} hidden{% endif %}>Over a VPN or Tor, a new account stays locked until you add funds or we approve it, which you can ask for {{ hold_hours }} hours after signing up.</p>{% endif %}
+      <p class="termsline" id="terms"{% if mode != "signup" %} hidden{% endif %}>By creating an account you accept the <a href="/terms/">terms</a> and <a href="/privacy/">privacy policy</a>.</p>
+      <div class="acts"><button class="pill light" type="submit" id="go">{% if mode == "signup" %}Create account{% else %}Log in{% endif %}</button></div>
+      <div class="links" id="forgotl"{% if mode == "signup" %} hidden{% endif %}><a href="#recover">Forgot password?</a></div>
+      <p class="switch" id="switch">{% if mode == "signup" %}Have an account? <a href="{% url 'login' %}" data-mode="login">Log in</a>{% else %}No account yet? <a href="{% url 'signup' %}" data-mode="signup">Sign up</a>{% endif %}</p>
+    </form>
+
+    <form class="step" id="tf" novalidate hidden>
+      <h1 class="hl" tabindex="-1">Two-factor code</h1>
+      <div class="fields">
+        <label class="label" for="totp" id="tflabel">Code from your authenticator app</label>
+        <div class="field"><input id="totp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6 digits"></div>
+        <p class="say bad" id="tferr" aria-live="assertive"></p>
+      </div>
+      <div class="acts"><a class="pill line" href="#">Back</a><button class="pill light" type="submit" id="tfgo">Log in</button></div>
+      <div class="links"><button type="button" id="userec">Use a backup code</button></div>
+    </form>
+
+    <form class="step" id="r1" novalidate hidden>
+      <h1 class="hl" tabindex="-1">Reset your password</h1>
+      <p class="lead">A reset by email makes a new key. Older mail opens again when you find your code.</p>
+      <p class="lead"><a class="inl" href="#recover-code">Have your recovery code? Use it instead</a>, and keep all your mail.</p>
+      <div class="fields">
+        <label class="label" for="raddr">Your recovery email</label>
+        <div class="field"><input id="raddr" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" placeholder="The address outside foldoy you set"></div>
+        <p class="say bad" id="r1err" aria-live="assertive"></p>
+      </div>
+      <div class="acts"><a class="pill line" href="#">Back</a><button class="pill light" type="submit">Send code</button></div>
+    </form>
+
+    <form class="step" id="r2" novalidate hidden>
+      <h1 class="hl" tabindex="-1">Check your recovery email</h1>
+      <p class="lead" id="r2msg"></p>
+      <div class="fields">
+        <label class="label" for="rcode">Code</label>
+        <div class="field"><input id="rcode" inputmode="numeric" autocomplete="one-time-code" maxlength="9" placeholder="8 digits"></div>
+        <p class="say bad" id="r2err" aria-live="assertive"></p>
+      </div>
+      <div class="acts"><a class="pill line" href="#forgot">Back</a><button class="pill light" type="submit">Continue</button></div>
+      <div class="links"><button type="button" id="resend">Send a new code</button></div>
+    </form>
+
+    <form class="step" id="r3" novalidate hidden>
+      <h1 class="hl" tabindex="-1">Set a new password</h1>
+      <p class="lead">This makes a new key. Older mail opens again when you enter your recovery code in Settings.</p>
+      <div class="fields">
+        <label class="label" for="npw">New password</label>
+        <div class="field"><input id="npw" type="password" autocomplete="new-password"><button class="end" type="button" data-show="npw">Show</button></div>
+        <p class="rule" id="nrule"><svg class="i" viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 10.5l3.5 3.5 7.5-8"/></svg>12 characters or more</p>
+        <div id="r3tf" hidden>
+          <label class="label is-f5c1b348" for="r3code">Two-factor code</label>
+          <div class="field"><input id="r3code" autocomplete="one-time-code" maxlength="20" placeholder="From your app, or a recovery code"></div>
+        </div>
+        <p class="say bad" id="r3err" aria-live="assertive"></p>
+      </div>
+      <div class="acts"><button class="pill light" type="submit">Save password</button></div>
+    </form>
+
+    <section class="step" id="r4" hidden>
+      <h1 class="hl" tabindex="-1">Password changed</h1>
+      <p class="lead">You're signed out everywhere. Older mail opens again when you enter your recovery code in Settings.</p>
+      <div class="acts"><a class="pill light" href="#" id="relog">Log in</a></div>
+    </section>
+
+    <section class="step" id="rc" hidden>
+      <h1 class="hl" tabindex="-1">Your recovery code</h1>
+      <p class="lead">You need it if you forget your password: it sets a new one and keeps all your mail. We can't show it again.</p>
+      <p class="rcode" id="rcv" aria-label="Your recovery code"></p>
+      <div class="acts duo"><button class="pill line" type="button" id="rcsave">Save as a file</button><button class="pill line" type="button" id="rccopy">Copy</button></div>
+      <div class="acts"><button class="pill light" type="button" id="rcdone" disabled>I've saved it</button></div>
+      <p class="say" id="rcsay">Save it or copy it first.</p>
+    </section>
+
+    <section class="step" id="rq" hidden>
+      <h1 class="hl" tabindex="-1">Reset your password</h1>
+      <div class="choice">
+        <a class="pill light" href="#recover-code" id="bycode">Reset with your recovery code</a>
+        <a class="pill line" href="#forgot" id="byemail">No code? Reset with your recovery email</a>
+      </div>
+      <p class="lead" id="byemailnote">A reset by email makes a new key. Older mail opens again when you find your code.</p>
+      <div class="links"><a href="#">Back to log in</a></div>
+    </section>
+
+    <form class="step" id="k1" novalidate hidden>
+      <h1 class="hl" tabindex="-1">Reset with your recovery code</h1>
+      <p class="lead">While privacy+ is on, the code changes your password only; your mail opens with your privacy+ key.</p>
+      <div class="fields">
+        <label class="label" for="kaddr">Address</label>
+        <div class="field"><input id="kaddr" type="email" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="you@foldoy.com"></div>
+        <label class="label is-gap" for="kcode">Recovery code</label>
+        <div class="field"><input id="kcode" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="8 groups of 4"></div>
+        <p class="say bad" id="k1err" aria-live="assertive"></p>
+      </div>
+      <div class="acts"><a class="pill line" href="#recover">Back</a><button class="pill light" type="submit">Continue</button></div>
+    </form>
+    <form class="step" id="k2" novalidate hidden>
+      <h1 class="hl" tabindex="-1">Two-factor code</h1>
+      <div class="fields">
+        <label class="label" for="ktotp">Code from your authenticator app, or a backup code</label>
+        <div class="field"><input id="ktotp" autocomplete="one-time-code" maxlength="20" placeholder="6 digits"></div>
+        <p class="say bad" id="k2err" aria-live="assertive"></p>
+      </div>
+      <div class="acts"><a class="pill line" href="#recover-code">Back</a><button class="pill light" type="submit">Continue</button></div>
+    </form>
+    <form class="step" id="k3" novalidate hidden>
+      <h1 class="hl" tabindex="-1">Set a new password</h1>
+      <p class="lead" id="k3lead">All your mail stays readable.</p>
+      <div class="fields">
+        <label class="label" for="knpw">New password</label>
+        <div class="field"><input id="knpw" type="password" autocomplete="new-password"><button class="end" type="button" data-show="knpw">Show</button></div>
+        <p class="rule" id="krule"><svg class="i" viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 10.5l3.5 3.5 7.5-8"/></svg><span>12 characters or more</span></p>
+        <p class="say bad" id="k3err" aria-live="assertive"></p>
+      </div>
+      <div class="acts"><button class="pill light" type="submit">Save password</button></div>
+    </form>
+    <section class="step" id="k4" hidden>
+      <h1 class="hl" tabindex="-1">Password changed</h1>
+      <p class="lead" id="k4lead">All your mail is still readable. You're signed out everywhere; log in with the new password.</p>
+      <div class="acts"><a class="pill light" href="#" id="krelog">Log in</a></div>
+    </section>
+
+  </div>
+</main>
+</div>
+
+<script type="module" src="{% static 'mail/signup/auth.js' %}"></script>
+<noscript><p class="noscript-note">foldoy mail needs JavaScript: your password never leaves your browser.</p></noscript>
+</body>
+</html>
