@@ -43,7 +43,7 @@
         <button class="human" type="button" id="human" aria-live="polite"{% if mode != "signup" %} hidden{% endif %}><span class="box" aria-hidden="true"><svg class="i" viewBox="0 0 20 20"><path d="M4.5 10.5l3.5 3.5 7.5-8"/></svg></span><span class="ht">Verify you're human</span><span class="hw">Proof of work</span></button>
         <p class="say bad" id="err" aria-live="assertive"></p>
       </div>
-      {% if hold_note %}<p class="termsline" id="holdnote"{% if mode != "signup" %} hidden{% endif %}>Over a VPN or Tor, a new account stays locked until you add funds or we approve it, which you can ask for {{ hold_hours }} hours after signing up.</p>{% endif %}
+      {% if hold_note %}<p class="termsline" id="holdnote"{% if mode != "signup" %} hidden{% endif %}>Over a VPN or Tor, a new account stays locked until you add funds or we approve it, which you can ask for right away.</p>{% endif %}
       <p class="termsline" id="terms"{% if mode != "signup" %} hidden{% endif %}>By creating an account you accept the <a href="/terms/">terms</a> and <a href="/privacy/">privacy policy</a>.</p>
       <div class="acts"><button class="pill light" type="submit" id="go">{% if mode == "signup" %}Create account{% else %}Log in{% endif %}</button></div>
       <div class="links" id="forgotl"{% if mode == "signup" %} hidden{% endif %}><a href="#recover">Forgot password?</a></div>

@@ -186,11 +186,11 @@ function lockedPane() {
   setView('pending', 'pane'); document.body.classList.add('locked');
   const s = S.me.sending, when = s.opens ? new Date(s.opens) : null;
   const at = when ? `${dayMonth(s.opens)}, ${when.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : '';
-  const [h, p, go] = s.rejected
+  const [h, p, go, note] = s.rejected
     ? ["This account wasn't approved.", 'Write to support@foldoy.com from another address if you think we got it wrong.', '']
     : s.applied ? ['Waiting for approval.', 'Log in again later; your mail is kept for you.', '']
     : s.can_apply ? ['Ask for approval.', 'Accounts made over a VPN or Tor are checked before they can be used. Ask now, or add funds to open it at once.',
-      '<button class="pill light md" type="button" data-act="askok">Request approval</button>']
+      '<button class="pill light md" type="button" data-act="askok">Request approval</button>', true]
     : ['Your account is locked for now.', `Accounts made over a VPN or Tor are checked before they can be used. Add funds from $10 to open it at once, or ask for approval from ${esc(at)}.`, ''];
   const fund = s.rejected ? '' : `<a class="pill ${go ? 'line' : 'light'} md" href="/account/deposit/">Add funds</a>`;
   pane.innerHTML = `<div class="blank"><div class="state lockst">
@@ -198,6 +198,7 @@ function lockedPane() {
     <h2>${h}</h2>
     <p><b>${esc(S.me.address || '')}</b></p>
     <p>${p}</p>
+    ${note ? '<div class="asknote"><textarea id="asknote" maxlength="1000" rows="3" placeholder="Anything we should know? Optional" aria-label="A message with your request"></textarea></div>' : ''}
     <p class="say bad" id="askerr" aria-live="assertive"></p>
     <div class="acts">${go}${fund}<button class="pill ghost md" type="button" data-act="logout">Log out</button></div>
     <p class="lockmore"><a href="mailto:support@foldoy.com">support@foldoy.com</a><button class="linkbtn" type="button" id="lockdel">Delete account</button></p>
@@ -212,7 +213,7 @@ function lockedPane() {
   const b = $('[data-act="askok"]');
   if (b) b.onclick = async () => {
     b.setAttribute('aria-busy', 'true');
-    try { S.me = await api.applyToSend(); lockedPane(); }
+    try { S.me = await api.applyToSend($('#asknote')?.value || ''); lockedPane(); }
     catch (x) { $('#askerr').textContent = x.message; b.removeAttribute('aria-busy'); }
   };
   $('#lockdel').onclick = () => { const f = $('#lockdelf'); f.hidden = !f.hidden; if (!f.hidden) $('#lockdelpw').focus(); };
