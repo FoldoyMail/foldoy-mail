@@ -2256,7 +2256,7 @@ svg.i :is(path, circle, rect, line, polyline, polygon) { vector-effect: non-scal
 .nav-2#nav3 .n { font-variant-numeric: tabular-nums; }
 .acct:has(> .gopro) { display: flex; align-items: center; gap: 10px; }
 .gopro { flex: none; height: 34px; padding: 0 14px; border-radius: var(--r); font-size: 13px; }
-.qa { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 4px 16px 12px; }
+.qa { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 4px 16px 12px; }
 .qa-b { display: flex; align-items: center; gap: 10px; min-width: 0; height: 46px; padding: 0 14px; border-radius: var(--r); background: var(--plate-2); color: var(--ink); font-size: 15px; font-weight: 500; }
 .qa-b .i { flex: none; width: 19px; height: 19px; color: var(--ink-2); }
 .qa-b span:not(.qa-n) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
