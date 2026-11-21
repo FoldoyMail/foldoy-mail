@@ -77,7 +77,7 @@ const unl = (n, kind) => n >= UNL[kind];
 const ofLim = (used, lim, kind) => (unl(lim, kind) ? `${used}` : `${used} of ${lim}`);
 const LIFTS = {
   aliases: [p => p.aliases, n => (unl(n, 'aliases') ? 'unlimited aliases' : `${n.toLocaleString('en-GB')} aliases`), () => S.me.alias_limit],
-  storage: [p => p.storage_gb, n => `${n} GB of storage`, () => (S.me.storage?.quota_bytes || 0) / 1e9],
+  storage: [p => p.storage_gb, n => `${gb(n * 1e9)} of storage`, () => (S.me.storage?.quota_bytes || 0) / 1e9],
   sending: [p => p.send_per_day?.messages || 0, n => `${n} emails a day`, () => S.me.sending?.messages || 0],
   domains: [p => p.custom_domains, n => (unl(n, 'domains') ? 'unlimited custom domains' : `${n} custom domain${n === 1 ? '' : 's'}`), () => S.me.domain_limit || 0],
 };
@@ -876,8 +876,8 @@ list.addEventListener('click', e => {
   const b = e.target.closest('[data-ctx]'); if (!b) return;
   e.preventDefault(); e.stopPropagation();
   const id = b.closest('.ctxmenu').dataset.id, k = b.dataset.ctx; closeFloat();
-  if (k === 'open') { location.hash = `#/f/${S.folder}/${id}`; return; }
-  if (k === 'reply' || k === 'forward') { location.hash = `#/f/${S.folder}/${id}`; setTimeout(() => { if (S.open?.id === id) startCompose(k, S.open); }, 700); return; }
+  if (k === 'open') { location.hash = list.querySelector(`.row[data-id="${CSS.escape(id)}"]`)?.getAttribute('href') || `#/f/${S.folder}/${id}`; return; }
+  if (k === 'reply' || k === 'forward') return openThen(id, k);
   if (k === 'star' || k === 'unstar') { list.querySelector(`[data-star="${id}"]`)?.click(); return; }
   const at = S.ctxAt ? { getBoundingClientRect: () => new DOMRect(S.ctxAt.x, S.ctxAt.y - 6, 0, 0) } : null;
   if (k === 'move') { S.rowAct = id; moveMenu(true, at); return; }
@@ -1745,7 +1745,7 @@ function startCompose(mode, m) {
     if (mode === 'replyall') { const inTo = new Set(c.to.split(',').map(x => x.trim().toLowerCase())); c.cc = [...new Set([...m.to, ...(m.cc || [])].map(a => a.addr))].filter(a => a !== me && a !== fromAddr && a !== m.from.addr && !inTo.has(a.toLowerCase())).join(', '); }
     c.subject = re(m.subject); c.text = sig; c.quote = m.from.addr === ORDERS ? '' : quoted;
   } else if (mode === 'forward') { c.files = (m.attachments || []).filter(a => !shownInline(m, a)).map(a => ({ name: a.name, type: a.type || 'application/octet-stream', size: a.size || 0, bytes: null, from: { m, a } })); c.subject = fw(m.subject); c.fwd = `Forwarded message from ${nameOf(m.from)} <${m.from.addr}>, ${full(m.date)}\nSubject: ${m.subject}\n\n${(m.text || '').replace(/\s+$/, '')}`; c.text = `${sig}\n\n${c.fwd}`; }
-  else if (mode === 'draft') { c.to = m.to.map(a => a.addr).join(', '); c.subject = m.subject; c.text = m.text || ''; c.html = m.html || null; c.draftId = m.id; }
+  else if (mode === 'draft') { c.from = m.from?.addr || c.from; c.to = m.to.map(a => a.addr).join(', '); c.cc = (m.cc || []).map(a => a.addr).join(', '); c.subject = m.subject; c.text = m.text || ''; c.html = m.html || null; c.draftId = m.id; }
   else c.text = sig;
   S.compose = c;
   S.back = location.hash.startsWith('#/compose') ? S.back : location.hash || '#/f/inbox';
@@ -2134,6 +2134,7 @@ async function send() {
       c.accept_keys = [...(c.accept_keys || []), ...moved.map(x => x.now)];
     }
   } catch {}
+  clearTimeout(c.t); if (c.saving) await c.saving.catch(() => {});
   if (c.send_at) {
     b.setAttribute('aria-busy', 'true');
     try {
@@ -2485,7 +2486,7 @@ function loadingView(view, title, depth) {
   const al = view === 'aliases', lim = S.me?.alias_limit;
   const two = n => Array.from({ length: n }, (_, i) => `<div class="row arow skr skl"><span class="r1"><i style="width:${[52, 46, 56, 44][i % 4]}%"></i></span><span class="r2"><i style="width:${[30, 26, 34, 22][i % 4]}%"></i></span></div>`).join('');
   list.innerHTML = `<div class="lh"><button class="menu-btn" type="button" data-act="rail" aria-label="Folders and settings">${icon('menu')}</button><h1>${title}</h1></div>
-    ${al && lim ? `<p class="lsub"><b>${S.me.alias_count ?? ''}</b> of ${lim} on ${PLAN[S.me.plan] || ''}</p>` : ''}
+    ${al && lim ? `<p class="lsub"><b>${S.me.alias_count ?? ''}</b>${unl(lim, 'aliases') ? '' : ` of ${lim}`} on ${PLAN[S.me.plan] || ''}</p>` : ''}
     <div class="rows" aria-busy="true" aria-label="Loading">${al ? two(Math.min(S.me?.alias_count || 4, 8)) : bars(8, [46, 34, 52, 30, 44, 58, 38, 48])}</div>`;
   pane.innerHTML = phone() && depth !== 'pane' ? '' : `<div class="in skpane" aria-busy="true"><i class="skh"></i>${Array.from({ length: 5 }, (_, i) => `<div class="skline"><i style="width:${[22, 30, 18, 26, 34][i]}%"></i><i style="width:${[30, 20, 26, 16, 22][i]}%"></i></div>`).join('')}</div>`;
 }
@@ -2498,7 +2499,7 @@ function drawAliases(id) {
       <h1>Aliases</h1><span class="sp"></span>
       ${lim ? `<a class="pill light sm" href="#/aliases/new" ${full ? 'aria-disabled="true"' : ''}>${icon('plus')}New</a>` : ''}
     </div>
-    <p class="lsub"><b>${used}</b> of ${lim} on ${PLAN[S.me.plan]}${S.me.plan === 'free' ? '. They receive mail only and stay yours: turn one off, not delete.' : ''}</p>
+    <p class="lsub"><b>${used}</b>${unl(lim, 'aliases') ? '' : ` of ${lim}`} on ${PLAN[S.me.plan]}${S.me.plan === 'free' ? '. They receive mail only and stay yours: turn one off, not delete.' : ''}</p>
     <div class="rows" role="list">${S.aliases.map(a => `
       <a class="row arow ${a.active ? '' : 'dead'}" role="listitem" href="#/aliases/${a.id}" data-id="${a.id}">
         <span class="r1"><span class="addr">${esc(a.address)}</span>${a.held ? '<span class="tagx">Paused</span>' : a.active ? '' : '<span class="tagx">Killed</span>'}</span>
@@ -2542,8 +2543,8 @@ async function aliasDetail(a) {
       <div class="recv" id="recv"></div>
     </div>`;
   if (phone()) $('#ah').focus({ preventScroll: true });
-  $('#anote').addEventListener('change', async e => { await api.updateAlias(a.id, { note: e.target.value.trim() }); toast('Note saved'); showAliases(a.id); });
-  const r = await api.messages({ alias: a.address });
+  $('#anote').addEventListener('change', async e => { try { await api.updateAlias(a.id, { note: e.target.value.trim() }); } catch (x) { return toast(x.message); } toast('Note saved'); showAliases(a.id); });
+  let r; try { r = await api.messages({ alias: a.address }); } catch { return; }
   const h = $('#recv'); if (!h) return;
   h.innerHTML = r.items.length ? recvHtml(r.items) : '<p class="u-p12 listnote">Nothing yet.</p>';
   const cn = $('#recvn'); if (cn && r.items.length) { cn.textContent = `${r.items.length}${r.next ? '+' : ''} received`; cn.hidden = false; }
@@ -2551,13 +2552,16 @@ async function aliasDetail(a) {
 }
 async function aliasAct(kind) {
   const id = location.hash.split('/')[2], a = S.aliases.find(x => x.id === id); if (!a) return;
-  if (kind === 'kill') { await api.updateAlias(id, { active: false }); toast('Killed. Mail to it is refused.', { label: 'Undo', run: async () => { await api.updateAlias(id, { active: true }); showAliases(id); } }); }
-  if (kind === 'revive') { await api.updateAlias(id, { active: true }); toast('Receiving again'); }
-  if (kind === 'delete') {
-    const b = $('[data-alias-act="delete"]');
-    if (!b.dataset.sure) { b.dataset.sure = '1'; b.textContent = 'Delete for good'; b.className = 'pill kill md'; return; }
-    await api.deleteAlias(id); toast('Alias deleted'); S.me = await api.session(); location.hash = '#/aliases'; return;
-  }
+  try {
+    if (kind === 'kill') { await api.updateAlias(id, { active: false }); toast('Killed. Mail to it is refused.', { label: 'Undo', run: async () => { try { await api.updateAlias(id, { active: true }); } catch (x) { toast(x.message); } showAliases(id); } }); }
+    if (kind === 'revive') { await api.updateAlias(id, { active: true }); toast('Receiving again'); }
+    if (kind === 'delete') {
+      const b = $('[data-alias-act="delete"]');
+      if (!b.dataset.sure) { b.dataset.sure = '1'; b.textContent = 'Delete for good'; b.className = 'pill kill md'; return; }
+      await api.deleteAlias(id); toast('Alias deleted');
+      S.aliases = S.aliases.filter(x => x.id !== id); S.me = await api.session().catch(() => S.me); location.hash = '#/aliases'; return;
+    }
+  } catch (x) { toast(x.message); }
   showAliases(id);
 }
 function newAlias() {
@@ -2732,7 +2736,7 @@ function drawSettings(sec) {
   const impStatus = job && { running: job.cancelling ? 'Cancelling' : 'Copying', done: 'Done', cancelled: 'Cancelled', failed: 'Stopped', full: 'Stopped: mailbox full' }[job.status];
   const ownF = S.folders.filter(f => !f.role && !f.view), ar = S.me.autoreply || {};
   const ruleSays = r => `${r.field === 'from' ? 'From' : 'Sent to'} <b>${esc(r.value)}</b>: ${r.action === 'move' ? `move to ${esc(folderLabel(r.folder))}` : r.action === 'star' ? 'star it' : 'mark it read'}`;
-  const dayVal = iso => (iso ? iso.slice(0, 10) : '');
+  const dayVal = iso => { const d = iso ? new Date(iso) : null; return d && !isNaN(d) ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : ''; };
   const perm = 'Notification' in window ? Notification.permission : 'unsupported';
   const body = {
     screener: () => screenerSettings({ group, row }),
@@ -3728,7 +3732,7 @@ document.addEventListener('click', async e => {
   if (a === 'print') { closeMore(); window.print(); return; }
   if (a === 'original') { closeMore(); const w = window.open('', '_blank'); try { const r = await fetch(`/mail/api/messages/${encodeURIComponent(S.open.id)}/raw`, { credentials: 'same-origin' }); const t = r.ok ? await r.text() : `From: ${S.open.from.addr}\nTo: ${S.open.to.map(p => p.addr).join(', ')}\nDate: ${S.open.date}\nSubject: ${S.open.subject}\n\n${S.open.text || ''}`; if (w) { w.document.title = S.open.subject || 'Original'; const pre = w.document.createElement('pre'); pre.textContent = t; pre.style.cssText = 'white-space:pre-wrap;font:13px/1.5 ui-monospace,monospace;padding:16px'; w.document.body.append(pre); } } catch { if (w) w.close(); toast("The original couldn't be loaded."); } return; }
   if (a === 'junk') { const j = S.folders.find(f => f.role === 'junk'); if (j) moveTo(j.id); return; }
-  if (a === 'logout') { idx.stop(); await account.logout(S.me.address); location.href = '/login/'; }
+  if (a === 'logout') { S.leaving = true; idx.stop(); await account.logout(S.me.address); location.href = '/login/'; }
 });
 
 function meMenu(open) {
@@ -3774,7 +3778,7 @@ document.addEventListener('keydown', e => {
     const i = q(); if (i && document.activeElement === i) { i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); i.blur(); }
   };
   const check = () => setTimeout(() => {
-    if (!phone() || document.querySelector('.viewer')) return;
+    if (!phone() || S.leaving || document.querySelector('.viewer')) return;
     const open = layerOpen();
     if (open && !guarded) { history.pushState({ layer: 1 }, ''); guarded = true; guardHash = location.hash; }
     else if (!open && guarded) {
@@ -3784,6 +3788,7 @@ document.addEventListener('keydown', e => {
   }, 0);
   for (const ev of ['click', 'touchend', 'input', 'keyup', 'focusin', 'focusout']) document.addEventListener(ev, check, true);
   addEventListener('popstate', e => {
+    if (S.leaving) return;
     if (unguarding) { unguarding = false; return; }
     if (guarded && layerOpen()) { guarded = false; closeTop(); return; }
     guarded = false;
@@ -3836,7 +3841,7 @@ function openThen(id, mode) {
   if (S.open?.id === id && !S.open.pending) return startCompose(mode, S.open);
   const row = list.querySelector(`.row[data-id="${CSS.escape(id)}"]`);
   location.hash = row?.getAttribute('href') || `#/f/${S.folder}/${id}`;
-  const go = (n = 0) => { if (S.open?.id === id && !S.open.pending) startCompose(mode, S.open); else if (n < 40) setTimeout(() => go(n + 1), 50); };
+  const go = (n = 0) => { if (S.open?.id === id && !S.open.pending) startCompose(mode, S.open); else if (n < 200 && location.hash.endsWith(`/${id}`)) setTimeout(() => go(n + 1), 50); };
   go();
 }
 const MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
