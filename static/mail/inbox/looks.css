@@ -1225,3 +1225,5 @@ body .toast .tx { width: 36px; height: 36px; padding: 0; color: inherit; box-sha
 .reader .msg > .who[aria-expanded] { cursor: pointer; }
 .reader .msg.folded > :not(.who) { display: none; }
 .reader .msg.folded > .who .who-to { pointer-events: none; }
+:root[data-look] .reader:has(.tm-w) .msg > hr.r-hr { display: none !important; }
+:root[data-look] .reader:has(.tm-w) .msg:not(.folded) > .who { margin-bottom: 20px; }
