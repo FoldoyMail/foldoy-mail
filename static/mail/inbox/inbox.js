@@ -1241,7 +1241,7 @@ function renderReader(m) {
         : `<h2 class="r-subj" id="rsubj" tabindex="-1">${esc(m.subject || '(no subject)')}</h2>`}
       ${S.thread ? cards(S.thread.filter(x => x.date <= m.date)) : ''}
       <div class="msg">
-      <div class="who">
+      <div class="who"${S.thread?.length ? ' aria-expanded="true" title="Click to fold"' : ''}>
         ${avatar(m.from)}
         <div class="who-t">
           <div class="who-l1"><span class="who-n">${esc(nameOf(m.from))}</span>${sec.icon ? `<span class="sec ${sec.cls}" data-tip="${esc(sec.label)}" aria-label="${esc(sec.label)}" role="img">${icon(sec.icon)}</span>` : ''}${m.from.name ? `<span class="who-a">${esc(m.from.addr)}</span>` : ''}</div>
@@ -2083,9 +2083,12 @@ async function whoGets() {
 }
 const nameFor = a => S.compose?.names?.[a] || NAMES()[a] || knownName(a) || '';
 const namesOf = c => Object.fromEntries([...addrs(c.to), ...addrs(c.cc), ...addrs(c.bcc)].map(a => [a.toLowerCase(), (c.names?.[a] || NAMES()[a] || knownName(a) || '').replace(/[\r\n]/g, ' ').slice(0, 120)]).filter(x => x[1]));
-function body(c) { return { from: c.from, to: addrs(c.to), cc: addrs(c.cc), bcc: addrs(c.bcc), names: namesOf(c), subject: c.subject, text: c.text, html: c.html || undefined, in_reply_to: c.ref, files: c.files, draft_id: c.draftId, send_at: c.send_at || undefined, lock: !!c.lock, accept_keys: c.accept_keys || [] }; }
+const OUT_STYLE = 'font-family: Arial, Helvetica, sans-serif; font-size: 14px; line-height: 1.5; color: #000000; background-color: #ffffff;';
+const textHtml = t => esc(t || '').replace(/\r\n?/g, '\n').split('\n').map(l => l || '<br>').map(l => (l === '<br>' ? '<div><br></div>' : `<div>${l}</div>`)).join('');
+const outHtml = c => (c.html || (c.text || '').trim() ? `<div style="${OUT_STYLE}">${c.html || textHtml(c.text)}</div>` : undefined);
+function body(c, out = false) { return { from: c.from, to: addrs(c.to), cc: addrs(c.cc), bcc: addrs(c.bcc), names: namesOf(c), subject: c.subject, text: c.text, html: out ? outHtml(c) : c.html || undefined, in_reply_to: c.ref, files: c.files, draft_id: c.draftId, send_at: c.send_at || undefined, lock: !!c.lock, accept_keys: c.accept_keys || [] }; }
 async function sendNow(c) {
-  const b = body(c);
+  const b = body(c, true);
   const outside = c.lock ? (await mail.classify([...b.to, ...b.cc, ...b.bcc])).plain : [];
   if (c.lock && outside.length) {
     const armored = await pgp.lockWithPassword({ subject: c.subject, text: c.text }, c.lock.pw);
@@ -3504,6 +3507,13 @@ document.addEventListener('click', async e => {
   const mv = e.target.closest('[data-moveto]'); if (mv) return moveTo(mv.dataset.moveto);
   const sl = e.target.closest('[data-later]'); if (sl) return sendLater(sl.dataset.later);
   const tm = e.target.closest('[data-tm]'); if (tm) return openCard(tm.dataset.tm);
+  const hd = e.target.closest('.msg > .who');
+  if (hd && S.thread?.length && !e.target.closest('button, a, [data-act], [data-tip]')) {
+    const msg = hd.parentElement, fold = !msg.classList.contains('folded');
+    msg.classList.toggle('folded', fold); hd.setAttribute('aria-expanded', String(!fold));
+    if (fold) $$('.tm[aria-expanded="true"]', pane).forEach(t => { t.setAttribute('aria-expanded', 'false'); const x = $(`#tmb-${t.dataset.tm}`, pane); if (x) x.hidden = true; });
+    return;
+  }
   const rd = e.target.closest('[data-rdel]');
   if (rd) { try { await api.deleteRule(rd.dataset.rdel); S.rulesList = null; toast('Rule deleted'); } catch (x) { toast(x.message); } return showSettings(); }
   const fd = e.target.closest('[data-fdelok]');
