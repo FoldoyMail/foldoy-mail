@@ -82,7 +82,7 @@ export const FREE_DOMAIN = document.querySelector('meta[name="foldoy-free-domain
 export const FREE_DOMAINS = [...new Set([FREE_DOMAIN, ...(document.querySelector('meta[name="foldoy-free-domains"]')?.content || '').split(',').map(d => d.trim()).filter(Boolean)])];
 export const DOMAINS = [
   ...FREE_DOMAINS.map(d => ({ d, plan: 'Free' })),
-  ...['veil.no'].filter(d => !FREE_DOMAINS.includes(d)).map(d => ({ d, plan: 'foldoy+' })),
+  ...['veil.no'].filter(d => !FREE_DOMAINS.includes(d)).map(d => ({ d, plan: 'Polar' })),
 ];
 
 export function picker(host, { name = '', domain = FREE_DOMAIN, domains = DOMAINS, note = '', placeholder = 'yourname', label = 'Name', onChange = () => {}, onPreview = () => {} } = {}) {

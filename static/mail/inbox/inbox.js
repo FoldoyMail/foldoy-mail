@@ -72,11 +72,14 @@ function needPlans(redraw) {
   return null;
 }
 const monthly = p => `${usd(p.prices.month).replace(/\.00$/, '')} a month`;
+const UNL = { aliases: 10000, domains: 100 };
+const unl = (n, kind) => n >= UNL[kind];
+const ofLim = (used, lim, kind) => (unl(lim, kind) ? `${used}` : `${used} of ${lim}`);
 const LIFTS = {
-  aliases: [p => p.aliases, n => `${n.toLocaleString('en-GB')} aliases`, () => S.me.alias_limit],
+  aliases: [p => p.aliases, n => (unl(n, 'aliases') ? 'unlimited aliases' : `${n.toLocaleString('en-GB')} aliases`), () => S.me.alias_limit],
   storage: [p => p.storage_gb, n => `${n} GB of storage`, () => (S.me.storage?.quota_bytes || 0) / 1e9],
   sending: [p => p.send_per_day?.messages || 0, n => `${n} emails a day`, () => S.me.sending?.messages || 0],
-  domains: [p => p.custom_domains, n => `${n} custom domain${n === 1 ? '' : 's'}`, () => S.me.domain_limit || 0],
+  domains: [p => p.custom_domains, n => (unl(n, 'domains') ? 'unlimited custom domains' : `${n} custom domain${n === 1 ? '' : 's'}`), () => S.me.domain_limit || 0],
 };
 function wall(kind, sentence, redraw) {
   const [get, , now] = LIFTS[kind];
@@ -317,7 +320,7 @@ function renderRail() {
   $('#nav3').innerHTML = `
     <a href="${DEPOSIT_URL}">${icon('addfunds')}<span>Add funds</span><span class="n">${usd(S.me.balance_usd)}</span></a>`;
   $('#nav2').innerHTML = `
-    <a href="#/aliases" ${h.startsWith('#/aliases') ? 'aria-current="page"' : ''}>${icon('at')}<span>Aliases</span><span class="n">${S.me.alias_count} of ${S.me.alias_limit}</span></a>
+    <a href="#/aliases" ${h.startsWith('#/aliases') ? 'aria-current="page"' : ''}>${icon('at')}<span>Aliases</span><span class="n">${ofLim(S.me.alias_count, S.me.alias_limit, 'aliases')}</span></a>
     <a href="#/settings" ${h.startsWith('#/settings') ? 'aria-current="page"' : ''}>${icon('gear')}<span>Settings</span></a>`;
   const dm = document.querySelector('.demo-mark'); if (dm) document.body.append(dm);
   $('#me').innerHTML = `
@@ -2513,7 +2516,7 @@ function aliasPitch() {
   pane.innerHTML = `<div class="blank"><div class="state">
     <img class="art" src="/static/mail/shared/art/aliases.svg" alt="">
     <h2>A new address for every site. <span class="mute">Kill it when it spams you.</span></h2>
-    <p class="dim">${PLAN[S.me.plan] || 'Your plan'}: ${S.me.alias_limit} alias${S.me.alias_limit === 1 ? '' : 'es'}.</p>
+    <p class="dim">${PLAN[S.me.plan] || 'Your plan'}: ${unl(S.me.alias_limit, 'aliases') ? 'unlimited aliases' : `${S.me.alias_limit} alias${S.me.alias_limit === 1 ? '' : 'es'}`}.</p>
     ${S.me.plan === 'polar' ? '' : S.me.plans_open ? `<div class="acts"><a class="pill light md" href="${PLANS_URL}">See plans</a></div>` : '<p class="dim">Paid plans can\'t be bought yet.</p>'}
   </div></div>`;
 }
@@ -2560,7 +2563,7 @@ async function aliasAct(kind) {
 function newAlias() {
   const lim = S.me.alias_limit, full = S.aliases.length >= lim;
   const own = S.me.address.split('@')[1];
-  const doms = [...new Set([own, ...FREE_DOMAINS, ...(S.me.plan === 'free' ? [] : ['veil.no'])])].map(d => ({ d, plan: '' }));
+  const doms = [...new Set([own, ...FREE_DOMAINS, ...(S.me.plan === 'polar' ? ['veil.no'] : [])])].map(d => ({ d, plan: '' }));
   pane.innerHTML = `
     <form class="in newa" id="naf" novalidate>
       <div class="tools"><button class="iconbtn back" type="button" data-act="aback" aria-label="Back to aliases">${icon('back')}</button></div>
@@ -3033,16 +3036,16 @@ function drawSettings(sec) {
           ${(S.invites || []).filter(i => !i.used).map(i => row('Unused link', `<b class="strong long">${esc(i.link)}</b>`, `<button class="pill line sm" type="button" data-copy="${esc(i.link)}">Copy</button>`)).join('')}
         </ul>`) : ''}
       ${group('h-inc', `Included with ${PLAN[S.me.plan]}`, `<ul class="kv">
-          ${row('Aliases', `<b>${S.me.alias_count} of ${S.me.alias_limit}</b>`, '<a class="pill line sm" href="#/aliases">Manage</a>')}
+          ${row('Aliases', `<b>${ofLim(S.me.alias_count, S.me.alias_limit, 'aliases')}</b>`, '<a class="pill line sm" href="#/aliases">Manage</a>')}
           ${extras ? row('Extra addresses', `<b>${extras.length} of ${S.me.address_limit}</b>`, '<a class="pill line sm" href="#/settings/addresses">Manage</a>') : ''}
-          ${doms ? row('Custom domains', `<b>${doms.length} of ${S.me.domain_limit}</b>`, '<a class="pill line sm" href="#/settings/domains">Manage</a>') : ''}
+          ${doms ? row('Custom domains', `<b>${ofLim(doms.length, S.me.domain_limit, 'domains')}</b>`, '<a class="pill line sm" href="#/settings/domains">Manage</a>') : ''}
         </ul>`)}`,
     addresses: () => `
       ${group('h-al', 'Aliases', `<ul class="kv">
           ${S.me.primary_address ? row('Your @foldoy.com address', `<b class="strong long">${esc(S.me.primary_address)}</b>`, `<button class="pill line sm" type="button" data-copy="${esc(S.me.primary_address)}">Copy</button>`) : ''}
           ${S.me.can_claim_address && setMode !== 'claim' ? row('Your @foldoy.com address', '', btn('claim', 'Claim', 'light'), `Comes with ${PLAN[S.me.plan]}. ${esc(S.me.address)} keeps working.`) : ''}
           ${row('Your address', `<b class="strong long">${esc(S.me.address)}</b>`, `<button class="pill line sm" type="button" data-copy="${esc(S.me.address)}">Copy</button>`)}
-          ${row('Aliases', `<b>${S.me.alias_count} of ${S.me.alias_limit}</b>`, '<a class="pill line sm" href="#/aliases">Manage</a>')}
+          ${row('Aliases', `<b>${ofLim(S.me.alias_count, S.me.alias_limit, 'aliases')}</b>`, '<a class="pill line sm" href="#/aliases">Manage</a>')}
         </ul>`, { sr: true })}
       ${extras ? `${group('h-addr', 'Extra addresses', `${extras.length ? `<ul class="kv">${extras.map(a => `<li class="wide"><span class="k">${esc(a.address)}${a.held ? paused : ''}</span><span class="val"><button class="pill line sm" type="button" data-copy="${esc(a.address)}">Copy</button><button class="pill line sm" type="button" data-addr-del="${esc(a.id)}">Remove</button></span></li>`).join('')}</ul>` : ''}
         ${setMode === 'claim' ? `<form class="form newa" id="claimf" novalidate>
@@ -3102,7 +3105,7 @@ function drawSettings(sec) {
           <label class="label" for="domin">Domain</label><div class="field"><input id="domin" placeholder="example.com" autocapitalize="none" spellcheck="false"></div>
           ${err('domerr')}
           ${acts('Add domain')}
-        </form>` : ''}`, { sr: true, lede: `${doms.length} of ${S.me.domain_limit} on ${PLAN[S.me.plan]}.` })}
+        </form>` : ''}`, { sr: true, lede: `${ofLim(doms.length, S.me.domain_limit, 'domains')} on ${PLAN[S.me.plan]}.` })}
       ${doms.some(d => d.held) ? held : ''}
       ${setMode !== 'dom-add' && doms.length < S.me.domain_limit ? `<div class="a-acts"><button class="pill line md" type="button" data-set="dom-add">Add a domain</button></div>`
         : doms.length >= S.me.domain_limit ? wall('domains', `Your plan holds ${S.me.domain_limit} custom domain${S.me.domain_limit === 1 ? '' : 's'}.`, again) : ''}`;

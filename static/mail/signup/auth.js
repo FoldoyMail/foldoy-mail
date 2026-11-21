@@ -65,8 +65,8 @@ const pk = picker($('#picker'), {
   name: PRE,
   ...(DOMAINS.some(o => o.d === PRED && o.plan === 'Free') ? { domain: PRED } : {}),
   domains: DOMAINS.map(o => ({ ...o, off: !PAID && o.plan !== 'Free' })),
-  note: PAID ? '@veil.no mailboxes open with foldoy+, $4/mo or $48/yr.'
-    : n => `${DOMAINS.filter(o => o.plan !== 'Free').map(o => '@' + o.d).join(', ')} open with foldoy+, when paid plans open. Until then, take ${n || 'yourname'}@${FREE_DOMAIN}.`,
+  note: PAID ? '@veil.no mailboxes open with Polar, $7/mo or $84/yr.'
+    : n => `${DOMAINS.filter(o => o.plan !== 'Free').map(o => '@' + o.d).join(', ')} open with Polar, when paid plans open. Until then, take ${n || 'yourname'}@${FREE_DOMAIN}.`,
   onChange: v => { Object.assign(st, v); st.ok = false; clearTimeout(timer); timer = setTimeout(check, 220);
     if (!v.name) { avail.textContent = ''; avail.className = 'say'; sugg.innerHTML = ''; } },
 });
@@ -78,7 +78,7 @@ async function check() {
   if (n !== seq) return;
   st.ok = r.ok;
   avail.className = 'say ' + (r.ok ? 'ok' : 'bad');
-  avail.innerHTML = r.ok ? `${icon('check', 'i ck')}<b>${esc(name)}@${esc(domain)}</b> is available.${domain !== FREE_DOMAIN ? ' Its mailbox opens with foldoy+.' : ''}` : esc(r.message);
+  avail.innerHTML = r.ok ? `${icon('check', 'i ck')}<b>${esc(name)}@${esc(domain)}</b> is available.${domain === 'veil.no' ? ' Its mailbox opens with Polar.' : ''}` : esc(r.message);
   sugg.innerHTML = '';
   if (/taken/i.test(r.message)) {
     const tries = [[name, domain === FREE_DOMAIN ? 'veil.no' : FREE_DOMAIN], [`${name}.${String(new Date().getFullYear()).slice(2)}`, domain], [`${name}.no`, domain], [`the.${name}`, domain]]
