@@ -375,6 +375,9 @@ async function peekKey(addr) {
   } catch { return null; }
 }
 const keyMem = new Map();
+const ROLE_NAMES = new Set(['abuse', 'admin', 'administrator', 'billing', 'contact', 'dmarc', 'foldoy', 'help', 'hostmaster', 'info', 'legal',
+  'mail', 'noc', 'postmaster', 'privacy', 'sales', 'security', 'support', 'tlsrpt', 'webmaster']);
+const isRole = a => FOLDOY.test(a) && a.endsWith('@foldoy.com') && ROLE_NAMES.has(a.split('@')[0].split('+')[0]);
 function lookup(a) {
   const hit = keyMem.get(a); if (hit && Date.now() - hit.at < 180000) return hit.p;
   const p = (async () => { const k = await api.keys(a); const c = await pgp.checkKey(k.public_key, a); return { public_key: k.public_key, fingerprint: c.fingerprint, matches: c.matches }; })();
@@ -409,7 +412,7 @@ export const mail = {
       const miss = FOLDOY.test(a) ? 'unknown' : 'plain';
       try {
         const c = await lookup(a);
-        if (!c.matches) return [miss, a];
+        if (!c.matches && !isRole(a)) return [miss, a];
         const was = await pinned(a, m);
         return ['e2e', { addr: a, public_key: c.public_key, fingerprint: c.fingerprint }, was && was !== c.fingerprint ? { addr: a, was, now: c.fingerprint } : null];
       } catch { return [miss, a]; }
