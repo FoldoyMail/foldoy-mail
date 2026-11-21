@@ -1,4 +1,4 @@
-import DOMPurify from './vendor/purify-3.4.17.es.js';
+import DOMPurify from './vendor/purify-3.4.18.es.js';
 
 const TAGS = ['a', 'abbr', 'b', 'blockquote', 'br', 'caption', 'center', 'code', 'col', 'colgroup', 'dd', 'del', 'div', 'dl', 'dt', 'em', 'font',
   'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'img', 'ins', 'kbd', 'li', 'mark', 'ol', 'p', 'pre', 'q', 's', 'small', 'span', 'strike',
