@@ -2167,6 +2167,9 @@ async function send() {
   } catch (x) { c.wall = limitWall(x, c); if (c.wall) $('#cwall').innerHTML = c.wall; else err.textContent = x.message; }
   finally { if (b.isConnected) { b.removeAttribute('aria-busy'); b.textContent = 'Send'; } }
 }
+let oopsN = 0;
+addEventListener('error', () => { if (oopsN++ < 3) api.oops('js-error'); });
+addEventListener('unhandledrejection', () => { if (oopsN++ < 3) api.oops('js-error'); });
 async function deliver(c) {
   try {
     await sendNow(c);
@@ -2174,6 +2177,7 @@ async function deliver(c) {
     if (/^#\/(f|s)\//.test(location.hash) || !location.hash) showMail({ folder: S.folder, q: S.q, id: S.sel || undefined, force: true });
   } catch (x) {
     S.outbox = null; c.sent = false; c.wall = limitWall(x, c);
+    if (!c.wall) api.oops('send-failed');
     toast(`Not sent: ${x.message}`, { label: 'Open', run: () => { S.compose = c; location.hash = '#/compose'; } }, 12000);
   }
 }

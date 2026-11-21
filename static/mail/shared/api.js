@@ -47,6 +47,7 @@ function withKey(s) {
 const sess = p => p.then(withKey);
 
 export const api = {
+  oops: kind => call('POST', 'oops', { kind }).catch(() => {}),
   check: (name, domain) => call('GET', `check?${qs({ name, domain })}`),
   prelogin: login => call('GET', `prelogin?${qs({ login })}`),
   signup: body => sess(call('POST', 'signup', body)),
@@ -380,7 +381,12 @@ const ROLE_NAMES = new Set(['abuse', 'admin', 'administrator', 'billing', 'conta
 const isRole = a => FOLDOY.test(a) && a.endsWith('@foldoy.com') && ROLE_NAMES.has(a.split('@')[0].split('+')[0]);
 function lookup(a) {
   const hit = keyMem.get(a); if (hit && Date.now() - hit.at < 180000) return hit.p;
-  const p = (async () => { const k = await api.keys(a); const c = await pgp.checkKey(k.public_key, a); return { public_key: k.public_key, fingerprint: c.fingerprint, matches: c.matches }; })();
+  const p = (async () => {
+    const k = await api.keys(a); const c = await pgp.checkKey(k.public_key, a);
+    const base = a.replace(/\+[^@]*@/, '@');
+    const matches = c.matches || (base !== a && (await pgp.checkKey(k.public_key, base)).matches);
+    return { public_key: k.public_key, fingerprint: c.fingerprint, matches };
+  })();
   keyMem.set(a, { at: Date.now(), p }); p.catch(() => { if (FOLDOY.test(a) && keyMem.get(a)?.p === p) keyMem.delete(a); });
   return p;
 }
@@ -422,7 +428,7 @@ export const mail = {
   },
   async send(c, s) {
     const k = await mail.classify([...c.to, ...c.cc, ...c.bcc]);
-    if (k.unknown.length) throw new ApiError(`No foldoy account has ${k.unknown.join(', ')}.`, 400);
+    if (k.unknown.length) { api.oops('send-unknown-recipient'); throw new ApiError(`No foldoy account has ${k.unknown.join(', ')}.`, 400); }
     const moved = k.changed.filter(x => !(c.accept_keys || []).includes(x.now));
     if (moved.length) throw new ApiError(`${moved.map(x => x.addr).join(', ')} has a different key than before.`, 409, { key_changed: moved });
     for (const x of k.changed) await remember(x.addr, x.now, true);
