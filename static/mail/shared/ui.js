@@ -58,12 +58,14 @@ let lastUndo = null, lastUndoUntil = 0;
 const undoing = f => async () => { lastUndo = null; toast('Undone'); await f(); };
 export function takeUndo() { const f = Date.now() < lastUndoUntil ? lastUndo : null; lastUndo = null; return f ? undoing(f) : null; }
 export function toast(text, action, ms) {
-  lastUndo = action && action.label === 'Undo' ? action.run : null; lastUndoUntil = Date.now() + (ms || 8000);
+  const acts = Array.isArray(action) ? action : action ? [action] : [];
+  const und = acts.find(x => x.label === 'Undo');
+  lastUndo = und ? und.run : null; lastUndoUntil = Date.now() + (ms || 8000);
   let t = $('.toast');
   if (!t) { t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); document.body.append(t); }
-  t.innerHTML = `<span>${esc(text)}</span>${action ? `<button class="ta" type="button">${esc(action.label)}</button>` : ''}<button class="tx" type="button" aria-label="Dismiss" title="Dismiss"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>`;
+  t.innerHTML = `<span>${esc(text)}</span>${acts.map((x, i) => `<button class="ta" type="button" data-i="${i}">${esc(x.label)}</button>`).join('')}<button class="tx" type="button" aria-label="Dismiss" title="Dismiss"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>`;
   t.querySelector('.tx').onclick = () => { clearTimeout(tt); t.classList.remove('on'); lastUndo = null; };
-  if (action) t.querySelector('.ta').onclick = action.label === 'Undo' ? undoing(action.run) : () => { t.classList.remove('on'); lastUndo = null; action.run(); };
+  t.querySelectorAll('.ta').forEach(btn => { const x = acts[+btn.dataset.i]; btn.onclick = x.label === 'Undo' ? undoing(x.run) : () => { clearTimeout(tt); t.classList.remove('on'); lastUndo = null; x.run(); }; });
   const pane = document.getElementById('pane'), fab = document.querySelector('.fab');
   const fr = fab && getComputedStyle(fab).display !== 'none' ? fab.getBoundingClientRect() : null;
   const desk = matchMedia('(min-width: 1024px), (hover: hover)').matches;
@@ -72,7 +74,7 @@ export function toast(text, action, ms) {
   t.style.bottom = fr ? `${innerHeight - fr.top + 16}px` : pr ? `${innerHeight - pr.bottom + 20}px` : '';
   if (desk) { t.style.left = ''; t.style.bottom = ''; }
   requestAnimationFrame(() => t.classList.add('on'));
-  clearTimeout(tt); tt = setTimeout(() => t.classList.remove('on'), ms || (action ? 6000 : 3200));
+  clearTimeout(tt); tt = setTimeout(() => t.classList.remove('on'), ms || (acts.length ? 6000 : 3200));
 }
 
 const LETTERED = ['foldoy.com', 'veil.no'];

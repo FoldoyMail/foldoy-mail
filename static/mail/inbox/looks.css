@@ -1227,3 +1227,27 @@ body .toast .tx { width: 36px; height: 36px; padding: 0; color: inherit; box-sha
 .reader .msg.folded > .who .who-to { pointer-events: none; }
 :root[data-look] .reader:has(.tm-w) .msg > hr.r-hr { display: none !important; }
 :root[data-look] .reader:has(.tm-w) .msg:not(.folded) > .who { margin-bottom: 20px; }
+
+.who-gets p.ok.lockline { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; column-gap: 10px; font-weight: 500; color: var(--ink); }
+.who-gets p.lockline .i { margin: 0; color: var(--accent); }
+.who-gets p.lockline > span { min-width: 0; overflow-wrap: anywhere; }
+.who-gets p.lockline .linkbtn { height: auto; margin: 0; padding: 4px 0 4px 8px; background: none; box-shadow: none; font-size: 13px; font-weight: 400; color: var(--ink-2); white-space: nowrap; }
+.who-gets p.lockline .linkbtn:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.lockf { display: grid; gap: 14px; margin: 6px 0 8px; padding: 16px; border-radius: 12px; background: var(--k-band, var(--plate)); box-shadow: inset 0 0 0 1px var(--k-line, var(--hair)); }
+.lockf .lf-row { display: grid; grid-template-columns: minmax(0, 1fr) !important; gap: 6px; align-items: start; }
+.lockf .label { margin: 0; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--ink-2); }
+.lockf .label span { font-weight: 400; opacity: .8; }
+.lockf input, .lockf select { width: 100%; height: 40px; padding: 0 12px; border-radius: 8px; background: var(--k-field, var(--ctl)); box-shadow: none; font-size: 14px; }
+.lockf .lf-in { position: relative; display: block; }
+.lockf .lf-in input { padding-right: 44px; }
+.lockf .lf-in .iconbtn { position: absolute; top: 4px; right: 4px; width: 32px; height: 32px; }
+.lockf #lkpw { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 14px; letter-spacing: .03em; }
+.lockf .say { margin: 0; font-size: 12px; line-height: 18px; color: var(--ink-2); }
+@media (min-width: 1024px), (hover: hover) {
+  .lockf { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, .9fr); column-gap: 12px; }
+  .lockf .say { grid-column: 1 / -1; }
+}
+@media (min-width: 1024px), (hover: hover) {
+  .lockf { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .lockf .lf-pw { grid-column: 1 / -1; }
+}

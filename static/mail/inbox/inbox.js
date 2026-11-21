@@ -1806,10 +1806,10 @@ async function showCompose() {
         <div class="chips" id="cfiles"></div>
         <div class="who-gets" id="cwho" aria-live="polite"></div>
         ${c.lock ? `<div class="lockf" id="lockf">
-          <div class="lf-row"><label class="label" for="lkpw">Password</label><input id="lkpw" type="text" autocomplete="off" spellcheck="false" value="${esc(c.lock.pw || '')}" placeholder="12 characters or more"></div>
+          <div class="lf-row lf-pw"><label class="label" for="lkpw">Password</label><span class="lf-in"><input id="lkpw" type="text" autocomplete="off" spellcheck="false" value="${esc(c.lock.pw || '')}" placeholder="12 characters or more"><button class="iconbtn" type="button" data-act="copypw" title="Copy password" aria-label="Copy password">${icon('copy')}</button></span></div>
           <div class="lf-row"><label class="label" for="lkhint">Hint <span>optional</span></label><input id="lkhint" type="text" autocomplete="off" maxlength="120" value="${esc(c.lock.hint || '')}"></div>
           <div class="lf-row"><label class="label" for="lkdays">Can be opened for</label><select id="lkdays">${[[1, '1 day'], [7, '1 week'], [28, '4 weeks']].map(([d, l]) => `<option value="${d}" ${+c.lock.days === d ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
-          <p class="say">They get a link instead of the message. Give them the password another way, not in this email.</p>
+          <p class="say">They get a link to open it. Send them the password another way, not in this email.</p>
         </div>` : ''}
         <div id="laterbox"></div>
         <div id="cwall">${c.wall || ''}</div>
@@ -2078,7 +2078,7 @@ async function whoGets() {
   const lines = [];
   if (k.e2e.length) lines.push(`<p class="ok">${icon('key')}<span>End-to-end: only ${esc(list3([...k.e2e.map(x => who(x.addr)), 'you']))} can read this.</span></p>`);
   if (k.plain.length && !c.lock) lines.push(`<p><span>${k.e2e.length ? 'Ordinary mail for ' + esc(list3(k.plain)) + '. It leaves foldoy readable.' : 'Ordinary mail. Outside addresses get it readable.'}</span><button class="linkbtn" type="button" data-act="lockon">Encrypt with a password</button></p>`);
-  if (k.plain.length && c.lock) lines.push(`<p class="ok">${icon('lock')}<span>Encrypted for ${esc(list3(k.plain))}: they open it on foldoy with the password.</span><button class="linkbtn" type="button" data-act="lockoff">Don't encrypt</button></p>`);
+  if (k.plain.length && c.lock) lines.push(`<p class="ok lockline">${icon('lock')}<span>Password-encrypted for ${esc(list3(k.plain))}</span><button class="linkbtn" type="button" data-act="lockoff">Don't encrypt</button></p>`);
   c.outsiders = k.plain;
   if (k.unknown.length) lines.push(`<p class="bad"><span>No foldoy account has ${esc(list3(k.unknown))}.</span></p>`);
   for (const x of k.changed) if (!(c.accept_keys || []).includes(x.now)) lines.push(`<p class="bad"><span>${esc(who(x.addr))}'s key changed since you first saw it. Check the fingerprint with them before you send. Send asks you first.</span></p>`);
@@ -2152,12 +2152,12 @@ async function send() {
     const back = /^#\/f\/drafts\/./.test(S.back) ? '#/f/drafts' : S.back, timer = setTimeout(() => deliver(c), wait * 1000);
     S.outbox = { c, timer };
     location.hash = back;
-    toast(`Sending in ${wait} s`, { label: 'Undo', run: () => {
+    toast(`Sending in ${wait} s`, [{ label: 'Send now', run: () => { if (S.outbox?.c !== c) return; clearTimeout(timer); deliver(c); } }, { label: 'Undo', run: () => {
       clearTimeout(timer); S.outbox = null;
       if (S.compose && S.compose !== c) { S.compose.dirty = true; saveDraft(true); const d = $('#dock'); if (d) d.parentNode.removeChild(d); }
       c.sent = false; S.compose = c; S.back = back;
       if (location.hash === '#/compose') showCompose(); else location.hash = '#/compose';
-    } }, wait * 1000);
+    } }], wait * 1000);
     const t0 = Date.now(), tick = setInterval(() => {
       const sp = $('.toast span'), left = Math.ceil((wait * 1000 - (Date.now() - t0)) / 1000);
       if (S.outbox?.c !== c || left <= 0 || !sp || !/^Sending in/.test(sp.textContent)) return clearInterval(tick);
@@ -3664,6 +3664,7 @@ document.addEventListener('click', async e => {
   if (a === 'move') return moveMenu(false);
   if (a === 'unschedule') return unschedule();
   if (a === 'later') return laterMenu();
+  if (a === 'copypw') { const f = $('#lkpw'); if (f) { copy(f.value); toast('Password copied'); } return; }
   if (a === 'lockon' || a === 'lockoff') { const c = S.compose; if (!c) return; read(); c.lock = a === 'lockon' ? { days: 7, hint: '', pw: pgp.newLockPassword() } : null; return showCompose(); }
   if (a === 'newalias') return composeAlias();
   if (a === 'unsnooze') { const m = S.open; try { await api.unsnooze(m.id); } catch (x) { return toast(x.message); } toast('Back where it was, unread'); S.key = ''; await refreshRail(); location.hash = S.back; return; }
