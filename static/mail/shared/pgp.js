@@ -159,14 +159,15 @@ export async function decrypt(armored, signerKey) {
   return { ...mime(data), verified, signed: signatures.length > 0 };
 }
 
-export async function encryptMail({ subject, text, html, files = [] }, publicKeys, from, { hide = false } = {}) {
+export async function encryptMail({ subject, text, html, files = [] }, publicKeys, from, { hide = false, bcc = [] } = {}) {
   const o = await load();
   const keys = await Promise.all([...new Set(publicKeys)].map(k => o.readKey({ armoredKey: k })));
   const self = (from && ring.find(k => k.alias === from)?.priv) || acct();
   if (self) keys.push(self.toPublic());
   const b = 'fp' + b64(crypto.getRandomValues(new Uint8Array(12))).replace(/[^A-Za-z0-9]/g, '');
   const atts = files.map(f => `\r\n--${b}\r\nContent-Type: ${safeType(f.type)}; name="${mimeName(f.name)}"\r\nContent-Disposition: attachment; filename="${mimeName(f.name)}"\r\nContent-Transfer-Encoding: base64\r\n\r\n${b64(f.bytes).replace(/(.{76})/g, '$1\r\n')}`).join('');
-  const inner = `Content-Type: multipart/mixed; boundary="${b}"; protected-headers="v1"\r\nSubject: ${(subject || '').replace(/[\r\n]+/g, ' ')}\r\n\r\n--${b}\r\n${toMime({ text, html })}${atts}\r\n--${b}--\r\n`;
+  const bccLine = bcc.length ? `Bcc: ${bcc.map(a => String(a).replace(/[\r\n,]+/g, ' ').trim()).filter(Boolean).join(', ')}\r\n` : '';
+  const inner = `Content-Type: multipart/mixed; boundary="${b}"; protected-headers="v1"\r\nSubject: ${(subject || '').replace(/[\r\n]+/g, ' ')}\r\n${bccLine}\r\n--${b}\r\n${toMime({ text, html })}${atts}\r\n--${b}--\r\n`;
   return o.encrypt({ message: await o.createMessage({ text: inner }), encryptionKeys: keys, ...(self ? { signingKeys: self } : {}), ...(hide ? { wildcard: true } : {}) });
 }
 const safeType = t => (/^[\w.+-]+\/[\w.+-]+$/.test(t || '') ? t : 'application/octet-stream');
@@ -240,12 +241,13 @@ function param(h, name) {
   return q ? decodeWords(q[1]) : undefined;
 }
 export function mime(raw) {
-  const out = { text: null, html: null, subject: null, files: [] };
+  const out = { text: null, html: null, subject: null, files: [], bcc: null };
   const walk = (part, top) => {
     const cut = part.search(/\r?\n\r?\n/);
     const head = cut < 0 ? part : part.slice(0, cut), body = cut < 0 ? '' : part.slice(cut).replace(/^\r?\n\r?\n/, '');
     const h = head.replace(/\r?\n[ \t]+/g, ' ');
     if (top) { const sj = h.match(/^subject:[ \t]*(.*)$/im); if (sj) out.subject = decodeWords(sj[1]).trim(); }
+    if (top) { const bc = h.match(/^bcc:[ \t]*(.*)$/im); if (bc) out.bcc = bc[1].split(',').map(x => x.trim()).filter(Boolean); }
     const type = (h.match(/^content-type:\s*([^;\s]+)/im) || [, 'text/plain'])[1].toLowerCase();
     const te = (h.match(/^content-transfer-encoding:\s*(\S+)/im) || [, ''])[1].toLowerCase();
     const charset = ((h.match(/^content-type:.*$/im) || [''])[0].match(/\bcharset="?([^";\s]+)"?/i) || [])[1];

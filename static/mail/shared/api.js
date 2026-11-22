@@ -79,7 +79,7 @@ export const api = {
   thread: tid => call('GET', `messages?${qs({ thread: tid })}`),
   snooze: (id, until) => { dropBody(id); return call('POST', `messages/${id}/snooze`, { until }); },
   unsnooze: id => { dropBody(id); return call('DELETE', `messages/${id}/snooze`); },
-  unsubscribe: id => { dropBody(id); return call('POST', `messages/${id}/unsubscribe`, {}); },
+  unsubscribe: (id, o = {}) => { dropBody(id); return call('POST', `messages/${id}/unsubscribe`, o); },
   preferences: p => sess(call('POST', 'preferences', p)),
   makeFolder: name => call('POST', 'folders', { name }),
   renameFolder: (id, name) => call('PATCH', `folders/${id}`, { name }),
@@ -109,6 +109,7 @@ export const api = {
   block: address => call('POST', 'blocked', { address }),
   unblock: id => call('DELETE', `blocked/${id}`),
   remove: id => { dropBody(id); return call('DELETE', `messages/${id}`); },
+  discard: id => { dropBody(id); return call('DELETE', `messages/${id}?discard=1`); },
   send: body => call('POST', 'send', body),
   saveDraft: (id, body) => call('PUT', `drafts/${id || 'new'}`, body),
   attach: file => { if (LIVE) { const f = new FormData(); f.append('file', file); return live('POST', 'attachments', {}, f); }
@@ -443,7 +444,7 @@ export const mail = {
     if (k.e2e.length) {
       const e = env(isE);
       const armored = await pgp.encryptMail({ ...parts, files }, [...k.e2e.map(x => x.public_key), ...ownPub], c.from, { hide: e.bcc.length > 0 });
-      id = (await api.send({ from: c.from, ...named(e, c.names), raw: pgp.rawMessage({ from: c.from, to: e.to, cc: e.cc, armored, names: c.names }), draft_id: c.draft_id, in_reply_to: c.in_reply_to, send_at: c.send_at })).id;
+      id = (await api.send({ from: c.from, ...named(e, c.names), raw: pgp.rawMessage({ from: c.from, to: e.to, cc: e.cc, armored, names: c.names }), draft_id: c.draft_id, in_reply_to: c.in_reply_to, send_at: c.send_at, ...(c.send_key ? { send_key: `${c.send_key}-e` } : {}) })).id;
       for (const x of k.e2e) await remember(x.addr, x.fingerprint);
     }
     if (k.plain.length) {
@@ -452,13 +453,14 @@ export const mail = {
       const copy = noCopy ? undefined : pgp.rawMessage({ from: c.from, to: p.to, cc: p.cc, names: c.names, armored: await pgp.encryptMail({ ...parts, files }, ownPub, c.from) });
       const out = c.outside || parts;
       const attachment_ids = c.outside ? [] : await Promise.all(files.map(async f => (await api.attach(new File([f.bytes], f.name, { type: f.type }))).id));
-      const r = await api.send({ from: c.from, ...named(p, c.names), ...out, attachment_ids, sent_copy: copy, ...(noCopy ? { no_copy: true } : {}), draft_id: mixed ? undefined : c.draft_id, in_reply_to: c.in_reply_to, send_at: c.send_at });
+      const r = await api.send({ from: c.from, ...named(p, c.names), ...out, attachment_ids, sent_copy: copy, ...(noCopy ? { no_copy: true } : {}), draft_id: mixed ? undefined : c.draft_id, in_reply_to: c.in_reply_to, send_at: c.send_at, ...(c.send_key ? { send_key: `${c.send_key}-p` } : {}) });
       id = r.id || id;
     }
     return { id };
   },
   async saveDraft(id, c) {
-    const armored = await pgp.encryptMail({ subject: c.subject, text: c.text, ...(c.html ? { html: c.html } : {}) }, [], c.from);
+    const files = (c.files || []).filter(f => f.bytes).map(f => ({ name: f.name, type: f.type, bytes: typeof f.bytes === 'function' ? f.bytes() : f.bytes }));
+    const armored = await pgp.encryptMail({ subject: c.subject, text: c.text, ...(c.html ? { html: c.html } : {}), files }, [], c.from, { bcc: lower(c.bcc || []) });
     return api.saveDraft(id, { raw: pgp.rawMessage({ from: c.from, to: lower(c.to), cc: lower(c.cc), armored, names: c.names }) });
   },
   async read(id, s, o = {}) {
@@ -489,6 +491,7 @@ export const mail = {
       try {
         const d = await pgp.decrypt(m.armored, sk?.public_key);
         Object.assign(m, { text: d.text, html: d.html, subject: d.subject || m.subject });
+        if (d.bcc?.length && m.folder === 'drafts') m.bcc = d.bcc.map(addr => ({ name: '', addr }));
         if (d.files?.length) m.attachments = d.files.map((f, i) => ({ id: `in:${i}`, name: f.name, size: f.size, type: f.type, cid: f.cid, bytes: f.bytes }));
         m.verified = !!(d.verified && sk && !sk.changed);
         m.unsigned = FOLDOY.test(m.from?.addr || '') && !d.verified && m.arrival === 'e2e';
@@ -824,7 +827,7 @@ async function standIn(method, path, body) {
     const id = `f${++s.seq}`; s.custom.push({ id, name }); save(); return { id };
   }
   if (r === 'PATCH folders') { const f = s.custom.find(x => x.id === parts[1]) || err('That folder is not one of yours.', 404); f.name = (body.name || '').trim() || f.name; save(); return { ok: true }; }
-  if (r === 'DELETE folders') { for (const m of s.messages) if (m.folder === parts[1]) m.folder = 'archive'; s.custom = s.custom.filter(x => x.id !== parts[1]); s.rules = s.rules.filter(x => x.folder !== parts[1]); save(); return { ok: true }; }
+  if (r === 'DELETE folders') { for (const m of s.messages) if (m.folder === parts[1]) m.folder = 'archive'; s.custom = s.custom.filter(x => x.id !== parts[1]); const had = s.rules.length; s.rules = s.rules.filter(x => x.folder !== parts[1]); save(); return { ok: true, rules_deleted: had - s.rules.length }; }
   if (r === 'GET rules' || r === 'POST rules') {
     if (method === 'POST') {
       if (!['from', 'to'].includes(body.field) || !['move', 'star', 'read'].includes(body.action)) err('Pick what to look at and what to do.');
@@ -862,7 +865,8 @@ async function standIn(method, path, body) {
   if (parts[0] === 'messages' && parts[2] === 'unsubscribe') {
     const m = s.messages.find(x => x.id === parts[1]) || err('That message is gone.', 404);
     if (!m.unsubscribe) err("This message doesn't say how to unsubscribe.", 404);
-    m.unsubscribed = true; save(); return m.unsubscribe.one_click ? { done: true } : { done: false, url: m.unsubscribe.url, mailto: m.unsubscribe.mailto };
+    if (body?.left) { m.unsubscribed = true; save(); return { done: true }; }
+    if (m.unsubscribe.one_click) m.unsubscribed = true; save(); return m.unsubscribe.one_click ? { done: true } : { done: false, url: m.unsubscribe.url, mailto: m.unsubscribe.mailto };
   }
   if (r === 'GET folders' || r === 'GET messages') { wake(); sentOut(); }
   const sendersAnswer = demoSenders(s, r, method, parts, q, body); if (sendersAnswer !== undefined) { save(); return sendersAnswer; }
@@ -916,7 +920,8 @@ async function standIn(method, path, body) {
   if (r === 'PATCH messages') { const m = find(parts[1]); for (const k of ['unread', 'flagged', 'folder']) if (k in body) m[k] = body[k]; save(); return pub(m); }
   if (r === 'DELETE messages') {
     const m = find(parts[1]);
-    if (m.folder === 'trash') s.messages = s.messages.filter(x => x !== m); else m.folder = 'trash';
+    if (q.discard === '1' && m.folder !== 'drafts') err('Only a draft can be discarded.', 400);
+    if (m.folder === 'trash' || q.discard === '1') s.messages = s.messages.filter(x => x !== m); else m.folder = 'trash';
     save(); return {};
   }
   if (r === 'PUT drafts') {

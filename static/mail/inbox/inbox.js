@@ -167,9 +167,9 @@ async function start() {
   setInterval(() => { if (!document.hidden) checkNew(); }, 30e3);
   setInterval(() => { if (document.hidden) checkNew(); }, 60e3);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) checkNew(); });
-  window.addEventListener('hashchange', route);
+  window.addEventListener('hashchange', routeSafe);
   if (!location.hash) history.replaceState(null, '', '#/f/inbox');
-  route();
+  routeSafe();
   const idle = window.requestIdleCallback || (f => setTimeout(f, 1500));
   setTimeout(() => idle(() => { if (!S.sd) fetchSettings().then(d => { if (!S.sd) S.sd = d; }).catch(() => {}); }), 1500);
 }
@@ -383,12 +383,18 @@ split.addEventListener('keydown', e => {
   e.preventDefault(); setListW(colW() + d); requestAnimationFrame(() => remember(SPLIT_KEY, String(Math.round(colW()))));
 });
 function setView(view, depth) { requestAnimationFrame(placeSplit); if (app.dataset.depth === 'pane' && depth === 'list') { app.classList.add('backing'); clearTimeout(backingT); backingT = setTimeout(() => app.classList.remove('backing'), 320); } app.dataset.view = view; app.dataset.depth = depth; if (view !== 'mail') document.documentElement.removeAttribute('data-boot-view'); }
+let routeGen = 0;
+const routeSafe = () => route().catch(x => { S.key = ''; toast(`That didn't load: ${x.message}`); });
 async function route() {
+  routeGen++;
   const h = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
   closeRail();
   if (h[0] !== 'compose') { const d = $('#dock'); if (d) d.parentNode.removeChild(d); }
   const toFolder = h[0] === 'f' && (h[1] || 'inbox') !== S.folder && !!list.querySelector('.rows[data-k]');
-  if (h[0] !== 'compose' && S.compose && !S.compose.sent) await saveDraft(true);
+  if (h[0] !== 'compose' && S.compose && !S.compose.sent && !(await saveDraft(true))) {
+    toast(`The draft couldn't be saved: ${S.compose.saveErr.replace(/\.+$/, '')}. It is still open.`);
+    history.replaceState(null, '', '#/compose'); return showCompose();
+  }
   if (h[0] !== 'compose') {
     const c = S.compose; if (c && !c.sent && c.ref && ['reply', 'replyall', 'forward'].includes(c.mode) && (c.dirty || c.draftId)) (S.parked ||= {})[c.ref] = c;
     S.compose = null; try { sessionStorage.removeItem('foldoy-composing'); } catch (_) {  }
@@ -406,7 +412,7 @@ async function route() {
 }
 
 async function showMail({ folder = 'inbox', q = '', id, force = false }) {
-  const wasPainted = !!S.painted;
+  const wasPainted = !!S.painted, gen = routeGen;
   const key = q ? `s:${q}` : `f:${folder}:${S.unreadOnly ? 'u' : ''}`;
   if (key !== S.key || !list.querySelector('.rows[data-k]')) {
     if (!key.startsWith(`f:${folder}:`) || q) S.picked.clear();
@@ -429,6 +435,7 @@ async function showMail({ folder = 'inbox', q = '', id, force = false }) {
       filling.then(() => { clearTimeout(due); due = 0; paint(); });
     }
     renderList(); renderRail();
+    if (gen !== routeGen) return;
   } else if (!id) markCurrent(null);
   setView('mail', id ? (phone() && app.dataset.depth === 'list' && S.open?.id !== id && !document.documentElement.hasAttribute('data-boot-open') ? 'list' : 'pane') : 'list');
   if (id && app.dataset.depth === 'list') { const want = id; setTimeout(() => { if (S.sel === want && app.dataset.depth === 'list' && location.hash.endsWith('/' + want)) setView('mail', 'pane'); }, 900); }
@@ -767,7 +774,9 @@ function listBar() {
       ${S.items.some(x => S.picked.has(x.id) && x.unread)
         ? `<button class="iconbtn" type="button" data-bulk="read" title="Mark read" aria-label="Mark read">${icon('mailopen')}</button>`
         : `<button class="iconbtn" type="button" data-bulk="unread" title="Mark unread" aria-label="Mark unread">${icon('mailclosed')}</button>`}
-      <button class="iconbtn" type="button" data-bulk="star" title="Star" aria-label="Star">${icon('star')}</button>
+      ${S.items.some(x => S.picked.has(x.id)) && S.items.every(x => !S.picked.has(x.id) || x.flagged)
+        ? `<button class="iconbtn" type="button" data-bulk="unstar" title="Remove star" aria-label="Remove star" aria-pressed="true">${icon('star')}</button>`
+        : `<button class="iconbtn" type="button" data-bulk="star" title="Star" aria-label="Star">${icon('star')}</button>`}
       <button class="iconbtn" type="button" data-bulk="move" title="Move to" aria-label="Move to" aria-haspopup="menu">${icon('folder')}</button>
       ${inJunk ? '' : `<button class="iconbtn" type="button" data-bulk="junk" title="Move to junk" aria-label="Move to junk">${icon('junk')}</button>`}
       <button class="iconbtn" type="button" data-bulk="${inTrash ? 'delete' : 'trash'}" title="${inTrash ? 'Delete for good' : 'Delete'}" aria-label="${inTrash ? 'Delete for good' : 'Delete'}">${icon('trash')}</button>
@@ -782,7 +791,7 @@ async function bulk(kind) {
   const ids = [...S.picked].flatMap(expand);
   if (!ids.length) return;
   const to = kind.startsWith('move:') ? kind.slice(5) : null;
-  const patch = to ? { folder: to } : { archive: { folder: 'archive' }, trash: { folder: 'trash' }, junk: { folder: 'junk' }, read: { unread: false }, unread: { unread: true }, star: { flagged: true } }[kind];
+  const patch = to ? { folder: to } : { archive: { folder: 'archive' }, trash: { folder: 'trash' }, junk: { folder: 'junk' }, read: { unread: false }, unread: { unread: true }, star: { flagged: true }, unstar: { flagged: false } }[kind];
   const picked = new Set(S.picked), gone = kind === 'delete' || 'folder' in patch, all = new Set(ids);
   const rows = S.items.filter(x => picked.has(x.id));
   const msgs = [...new Map(rows.flatMap(x => [x, ...(x.members || [])]).map(y => [y.id, y])).values()];
@@ -806,7 +815,7 @@ async function bulk(kind) {
       else await Promise.all(ids.map(id => inOrder(id, () => api.update(id, 'unread' in patch ? { unread: was.get(id).unread } : { flagged: was.get(id).flagged }))));
       railSoon();
       if (S.key !== beforeKey || app.dataset.view !== 'mail') { S.key = ''; if (app.dataset.view === 'mail') showMail({ folder: S.folder, q: S.q, id: S.sel || undefined }); }
-    } catch (x) { toast(`That didn't work: ${x.message}`); S.key = ''; await refreshRail(); if (app.dataset.view === 'mail') showMail({ folder: S.folder, id: S.sel || undefined }); }
+    } catch (x) { toast(`That didn't work: ${x.message}`); S.key = ''; await railQuiet(); if (app.dataset.view === 'mail') showMail({ folder: S.folder, id: S.sel || undefined }); }
   };
   if (gone) {
     S.items = S.items.filter(x => !picked.has(x.id)); if (S.raw) S.raw = S.raw.filter(x => !all.has(x.id));
@@ -817,12 +826,12 @@ async function bulk(kind) {
     if (S.open && all.has(S.open.id)) { Object.assign(S.open, patch); $$('[data-act="flag"]', pane).forEach(b => b.setAttribute('aria-pressed', String(!!S.open.flagged))); }
   }
   S.picked.clear(); renderList();
-  toast((to ? `Moved to ${folderLabel(to)}` : { archive: 'Archived', trash: 'Moved to trash', junk: 'Moved to junk', read: 'Marked read', unread: 'Marked unread', star: 'Starred', delete: 'Deleted' }[kind])
+  toast((to ? `Moved to ${folderLabel(to)}` : { archive: 'Archived', trash: 'Moved to trash', junk: 'Moved to junk', read: 'Marked read', unread: 'Marked unread', star: 'Starred', unstar: 'Star removed', delete: 'Deleted' }[kind])
     + ((rows.length || ids.length) > 1 ? ` (${rows.length || ids.length})` : ''), undo ? { label: 'Undo', run: undo } : undefined, undo ? 6000 : undefined);
   if (gone && S.sel && all.has(S.sel)) location.hash = S.back;
   try { await Promise.all(ids.map(id => inOrder(id, () => (kind === 'delete' ? api.remove(id) : api.update(id, patch))))); railSoon(); if (gone) repage(); }
   catch (x) {
-    toast(`That didn't work: ${x.message}`); S.key = ''; await refreshRail();
+    toast(`That didn't work: ${x.message}`); S.key = ''; await railQuiet();
     return showMail({ folder: S.folder, q: S.q, id: S.sel && !all.has(S.sel) ? S.sel : undefined });
   }
 }
@@ -1011,7 +1020,7 @@ list.addEventListener('click', async e => {
   const on = !m.flagged, ids = on ? [m.id] : expand(m.id);
   const paint = v => { m.flagged = v; if (!v) m.members?.forEach(x => { x.flagged = false; }); if (S.open?.id === m.id) { S.open.flagged = v; $$('[data-act="flag"]', pane).forEach(b => b.setAttribute('aria-pressed', String(v))); } patchRows(); };
   paint(on);
-  try { await Promise.all(ids.map(id => api.update(id, { flagged: on }))); refreshRail(); }
+  try { await Promise.all(ids.map(id => api.update(id, { flagged: on }))); railQuiet(); }
   catch (x) { paint(!on); toast(x.message); }
 }, true);
 list.addEventListener('focusin', e => { const r = e.target.closest?.('.row'); if (r && list.contains(r)) $$('.row', list).forEach(x => { x.tabIndex = x === r ? 0 : -1; }); });
@@ -1097,6 +1106,7 @@ function stubOf(id) {
   return { ...r, cc: [], bcc: [], text: '', html: '', attachments: [], unsubscribe: null, pending: true };
 }
 let railT = 0;
+const railQuiet = () => refreshRail().catch(() => {});
 function railSoon(folder, d = 0) {
   const f = folder && d && S.folders.find(x => x.id === folder);
   if (f) { f.unread = Math.max(0, (f.unread || 0) + d); railGen++; renderRail(); }
@@ -1144,7 +1154,11 @@ async function openMessage(id) {
   if (S.sel !== id) return;
   if (m.locked) { bootDone(); setView('mail', 'pane'); return loadKeyPane(m); }
   if (m.folder === 'drafts' && S.outbox?.c?.draftId === m.id) { clearTimeout(S.outbox.timer); S.outbox = null; $('.toast')?.classList.remove('on'); toast('Not sent. It is open again.'); }
-  if (m.folder === 'drafts' && !phone()) { bootDone(); S.open = m; history.replaceState(null, '', '#/f/drafts'); S.sel = null; return startCompose('draft', m); }
+  if (m.folder === 'drafts' && !phone()) {
+    bootDone(); S.open = m; history.replaceState(null, '', '#/f/drafts'); S.sel = null;
+    if ($('.reader', pane)) { emptyPane(); markCurrent(null); if (!splitPane()) setView('mail', 'list'); }
+    return startCompose('draft', m);
+  }
   if (early && m.thread_id === tid && !S.thread) {
     const t = await Promise.race([early, new Promise(r => setTimeout(() => r(null), 250))]);
     if (S.sel !== id) return;
@@ -1180,7 +1194,7 @@ async function openMessage(id) {
   if (S.resume?.ref === id) {
     const r = S.resume; S.resume = null;
     startCompose(r.mode || 'reply', m);
-    if (S.compose) Object.assign(S.compose, { resumed: true, to: r.draft.to.map(a => a.addr).join(', '), subject: r.draft.subject, text: r.draft.text || '', html: r.draft.html || null, draftId: r.draft.id, quote: '' });
+    if (S.compose) Object.assign(fromDraft(S.compose, r.draft), { resumed: true, quote: '' });
   }
 }
 
@@ -1267,7 +1281,7 @@ function renderReader(m) {
           <button class="who-to" type="button" data-act="details" aria-expanded="false" title="Details">${esc(toLine)}<svg class="i" viewBox="0 0 20 20" fill="none" stroke="currentColor" aria-hidden="true"><path d="M6 8l4 4 4-4"/></svg></button>
         </div>
         <span class="who-r">
-          ${m.unsubscribe && !unsubbed.has(unsubKey(m.unsubscribe)) ? '<button class="linkbtn unsub" type="button" data-act="unsub" id="unsubnote">Unsubscribe</button>' : ''}
+          ${m.unsubscribe && !m.unsubscribed && !unsubbed.has(unsubKey(m.unsubscribe)) ? '<button class="linkbtn unsub" type="button" data-act="unsub" id="unsubnote">Unsubscribe</button>' : ''}
           <time datetime="${m.date}" title="${esc(full(m.date))}">${phone() ? when(m.date) : full(m.date)}</time>
           <button class="iconbtn desk-only" type="button" data-act="flag" title="Star (s)" aria-label="Star" aria-pressed="${m.flagged}">${icon('star')}</button>
           ${isDraft ? '' : `<button class="iconbtn desk-only" type="button" data-act="reply" title="Reply (r)" aria-label="Reply">${icon('reply')}</button>`}
@@ -1347,7 +1361,7 @@ pane.addEventListener('scroll', closeMore, { passive: true });
 const schedOf = m => (S.folder === 'scheduled' ? S.items.find(x => x.id === m.id && x.scheduled_id) : null);
 async function unschedule() {
   const m = S.open, row = m && schedOf(m); if (!row) return;
-  try { const r = await api.cancelScheduled(row.scheduled_id); toast('Not sent. It is in Drafts.'); S.key = ''; await refreshRail(); location.hash = `#/f/drafts/${r.id}`; }
+  try { const r = await api.cancelScheduled(row.scheduled_id); toast('Not sent. It is in Drafts.'); S.key = ''; await railQuiet(); location.hash = `#/f/drafts/${r.id}`; }
   catch (x) { toast(x.message); }
 }
 function cards(xs) {
@@ -1669,7 +1683,7 @@ function loadKeyPane(m) {
       $('#pkey').value = ''; $('#ppin').value = '';
       S.key = ''; renderRail(); toast('Loaded until you close this tab');
       const h = m ? `${S.back}/${m.id}` : location.hash;
-      if (location.hash === h) route(); else location.hash = h;
+      if (location.hash === h) routeSafe(); else location.hash = h;
     } catch (x) { $('#ppsay').textContent = x.message; }
     finally { b.removeAttribute('aria-busy'); }
   });
@@ -1738,6 +1752,12 @@ function showPending() {
     </div></div>`;
 }
 
+function fromDraft(c, m) {
+  const list = xs => (xs || []).map(a => a.addr).join(', ');
+  for (const p of [...(m.to || []), ...(m.cc || []), ...(m.bcc || [])]) if (p?.name && p.addr) (c.names ||= {})[p.addr] = p.name;
+  const files = (m.attachments || []).map(a => ({ name: a.name, type: a.type || 'application/octet-stream', size: a.size || 0, bytes: null, from: { m, a } }));
+  return Object.assign(c, { from: m.from?.addr || c.from, to: list(m.to), cc: list(m.cc), bcc: list(m.bcc), subject: m.subject, text: m.text || '', html: m.html || null, draftId: m.id, files });
+}
 function startCompose(mode, m) {
   if (m?.pending) {
     const id = m.id, t0 = Date.now();
@@ -1761,7 +1781,7 @@ function startCompose(mode, m) {
     if (mode === 'replyall') { const inTo = new Set(c.to.split(',').map(x => x.trim().toLowerCase())); c.cc = [...new Set([...m.to, ...(m.cc || [])].map(a => a.addr))].filter(a => a !== me && a !== fromAddr && a !== m.from.addr && !inTo.has(a.toLowerCase())).join(', '); }
     c.subject = re(m.subject); c.text = sig; c.quote = m.from.addr === ORDERS ? '' : quoted;
   } else if (mode === 'forward') { c.files = (m.attachments || []).filter(a => !shownInline(m, a)).map(a => ({ name: a.name, type: a.type || 'application/octet-stream', size: a.size || 0, bytes: null, from: { m, a } })); c.subject = fw(m.subject); c.fwd = `Forwarded message from ${nameOf(m.from)} <${m.from.addr}>, ${full(m.date)}\nSubject: ${m.subject}\n\n${(m.text || '').replace(/\s+$/, '')}`; c.text = `${sig}\n\n${c.fwd}`; }
-  else if (mode === 'draft') { c.from = m.from?.addr || c.from; c.to = m.to.map(a => a.addr).join(', '); c.cc = (m.cc || []).map(a => a.addr).join(', '); c.subject = m.subject; c.text = m.text || ''; c.html = m.html || null; c.draftId = m.id; }
+  else if (mode === 'draft') fromDraft(c, m);
   else c.text = sig;
   S.compose = c;
   S.back = location.hash.startsWith('#/compose') ? S.back : location.hash || '#/f/inbox';
@@ -1863,7 +1883,7 @@ async function showCompose() {
   $('#cfrom').addEventListener('change', e => { if (e.target.value === '__new') composeAlias(); });
   ['cto', 'ccc', 'cbcc'].forEach(chips);
   renderFiles();
-  f.addEventListener('input', e => { c.dirty = true; c.ver = (c.ver || 0) + 1; const st = $('#cst'); if (st && st.textContent) st.textContent = ''; read(); clearTimeout(c.t); c.t = setTimeout(() => saveDraft(), 500); if (/^c(to|cc|bcc)$/.test(e.target.id)) { clearTimeout(c.w); c.w = setTimeout(whoGets, 350); } });
+  f.addEventListener('input', e => { c.dirty = true; c.ver = (c.ver || 0) + 1; const st = $('#cst'); if (st && st.textContent) st.textContent = ''; read(); clearTimeout(c.t); c.t = setTimeout(() => saveDraft(), draftWait(c)); if (/^c(to|cc|bcc)$/.test(e.target.id)) { clearTimeout(c.w); c.w = setTimeout(whoGets, 350); } });
   whoGets();
   f.addEventListener('submit', e => { e.preventDefault(); send(); });
   $('#cfile').addEventListener('change', async e => {
@@ -1871,7 +1891,7 @@ async function showCompose() {
       if (c.files.reduce((n, f) => n + f.size, 0) + file.size > 12e6) { $('#cerr').textContent = 'Files can be up to 12 MB in all.'; continue; }
       c.files.push({ name: file.name, type: file.type || 'application/octet-stream', size: file.size, bytes: new Uint8Array(await file.arrayBuffer()) });
     }
-    e.target.value = ''; renderFiles();
+    e.target.value = ''; renderFiles(); filesChanged(c);
   });
   richEditor(c);
   const first = c.mode === 'reply' || c.mode === 'replyall' || (c.mode === 'forward' && c.to) ? $('#ced') : (c.to ? $('#csub') : $('#cto'));
@@ -1963,7 +1983,7 @@ function read() {
   Object.assign(c, { from: $('#cfrom').value === '__new' ? c.from : $('#cfrom').value, to: rcpt('cto'), cc: rcpt('ccc'), bcc: rcpt('cbcc'), subject: $('#csub').value, text: $('#ctext').value });
   if (c.lock && $('#lkpw')) Object.assign(c.lock, { pw: $('#lkpw').value, hint: $('#lkhint').value.trim(), days: +$('#lkdays').value });
 }
-const rcpt = id => [...$$(`#${id}-chips .rc`).map(x => x.dataset.a), ...addrs($('#' + id)?.value)].join(', ');
+const rcpt = id => [...$$(`#${id}-chips .rc`).map(x => x.dataset.a), ...people($('#' + id)?.value).map(x => x.addr)].join(', ');
 const Q_HINTS = [['from:', 'Mail from someone'], ['to:', 'Mail to someone'], ['has:attachment', 'With files'], ['is:unread', 'Not read yet'], ['is:starred', 'Starred'], ['before:2026-01-01', 'Older than a date'], ['subject:', 'Words in the subject']];
 let qPick = -1;
 document.addEventListener('keydown', e => {
@@ -2039,7 +2059,7 @@ function chips(id) {
   const draw = list => {
     box.innerHTML = list.map(a => `<span class="rc${okAddr(a) ? '' : ' bad'}" data-a="${esc(a)}" title="${esc(okAddr(a) ? a : `${a} is not an email address`)}"><span class="rcn">${esc(nm[a] || nameFor(a) || a)}</span><button type="button" aria-label="Remove ${esc(a)}" data-rc>${icon('close')}</button></span>`).join('');
   };
-  const add = v => { if (!S.compose) return; const now = [...$$('.rc', box).map(x => x.dataset.a)]; for (const a of addrs(v)) if (!now.includes(a)) now.push(a); draw(now); inp.value = ''; hide(); S.compose.dirty = true; read(); clearTimeout(S.compose.w); S.compose.w = setTimeout(whoGets, 50); };
+  const add = v => { if (!S.compose) return; const now = [...$$('.rc', box).map(x => x.dataset.a)]; for (const { addr: a, name } of people(v)) { if (name && !S.compose.names?.[a]) (S.compose.names ||= {})[a] = name; if (!now.includes(a)) now.push(a); } draw(now); inp.value = ''; hide(); S.compose.dirty = true; read(); clearTimeout(S.compose.w); S.compose.w = setTimeout(whoGets, 50); };
   const hide = () => { sug.hidden = true; inp.setAttribute('aria-expanded', 'false'); pick = -1; };
   const show = () => {
     const q = inp.value.trim().toLowerCase(), have = new Set($$('.rc', box).map(x => x.dataset.a));
@@ -2050,7 +2070,12 @@ function chips(id) {
     if (hits.length) { $('.so', sug).setAttribute('aria-selected', 'true'); inp.setAttribute('aria-activedescendant', `${id}-o0`); } else inp.removeAttribute('aria-activedescendant');
   };
   draw(addrs(inp.value)); inp.value = '';
-  inp.addEventListener('input', e => { const v = inp.value; if (/[,;]$/.test(v) && v.trim().replace(/[,;]$/, '')) add(v); else if (/\s$/.test(v) && okAddr(v.trim())) add(v); else show(); });
+  inp.addEventListener('input', e => { const v = inp.value; if (/[,;]$/.test(v) && v.trim().replace(/[,;]$/, '') && !halfQuoted(v.slice(0, -1))) add(v); else if (/\s$/.test(v) && okAddr(v.trim())) add(v); else show(); });
+  inp.addEventListener('paste', e => {
+    const t = e.clipboardData?.getData('text/plain'); if (!t || !t.includes('@')) return;
+    const got = people(inp.value + t); if (!got.some(x => okAddr(x.addr))) return;
+    e.preventDefault(); add(inp.value + t);
+  });
   const take = () => {
     const v = inp.value.trim().replace(/[,;]$/, ''); if (!v) return false;
     if (okAddr(v)) { add(v); return true; }
@@ -2081,7 +2106,28 @@ function renderFiles() {
   h.innerHTML = c.files.map((a, i) => `<div class="att"><span class="t"><b>${esc(a.name)}</b><span>${size(a.size)}</span></span><button class="iconbtn" type="button" data-rmfile="${i}" aria-label="Remove ${esc(a.name)}">${icon('close')}</button></div>`).join('');
 }
 const addrs = s => (s || '').split(/[,;\s]+/).map(x => x.trim()).filter(Boolean);
-const okAddr = a => /^[^@\s<>()]+@[^@\s<>()]+\.[a-z]{2,}$/i.test(a);
+function people(t) {
+  const out = [], parts = [];
+  let cur = '', q = false, ang = false;
+  for (const ch of String(t || '')) {
+    if (ch === '"' && !ang) q = !q;
+    else if (ch === '<' && !q) ang = true;
+    else if (ch === '>' && !q) ang = false;
+    if (!q && !ang && /[,;\n\r]/.test(ch)) { parts.push(cur); cur = ''; } else cur += ch;
+  }
+  parts.push(cur);
+  for (const raw of parts) {
+    const seg = raw.trim(); if (!seg) continue;
+    const m = seg.match(/^(.*?)<\s*(?:mailto:)?([^<>\s]+)\s*>\s*$/i);
+    if (m) { out.push({ addr: m[2], name: m[1].trim().replace(/^"(.*)"$/, '$1').replace(/\\(.)/g, '$1').trim() }); continue; }
+    const words = seg.split(/\s+/).map(w => w.replace(/^mailto:/i, '')), at = words.filter(w => w.includes('@'));
+    if (at.length === 1 && words.length > 1) out.push({ addr: at[0], name: words.filter(w => !w.includes('@')).join(' ').replace(/^"(.*)"$/, '$1') });
+    else for (const w of words) out.push({ addr: w, name: '' });
+  }
+  return out;
+}
+const halfQuoted = v => ((v.match(/"/g) || []).length % 2 === 1) || v.lastIndexOf('<') > v.lastIndexOf('>');
+const okAddr = a => /^[^@\s<>()]+@[^@\s<>()]+\.(?:[a-z]{2,}|xn--[a-z0-9]{1,59})$/i.test(a);
 const NAMES = () => { const n = {}; for (const m of S.items) for (const p of [m.from, ...m.to]) if (p.name) n[p.addr] = p.name; return n; };
 const list3 = a => (a.length < 3 ? a.join(' and ') : `${a.slice(0, -1).join(', ')} and ${a[a.length - 1]}`);
 async function whoGets() {
@@ -2105,7 +2151,10 @@ const namesOf = c => Object.fromEntries([...addrs(c.to), ...addrs(c.cc), ...addr
 const OUT_STYLE = 'font-family: Arial, Helvetica, sans-serif; font-size: 14px; line-height: 1.5; color: #000000; background-color: #ffffff;';
 const textHtml = t => esc(t || '').replace(/\r\n?/g, '\n').split('\n').map(l => l || '<br>').map(l => (l === '<br>' ? '<div><br></div>' : `<div>${l}</div>`)).join('');
 const outHtml = c => (c.html || (c.text || '').trim() ? `<div style="${OUT_STYLE}">${c.html || textHtml(c.text)}</div>` : undefined);
-function body(c, out = false) { return { from: c.from, to: addrs(c.to), cc: addrs(c.cc), bcc: addrs(c.bcc), names: namesOf(c), subject: c.subject, text: c.text, html: out ? outHtml(c) : c.html || undefined, in_reply_to: c.ref, files: c.files, draft_id: c.draftId, send_at: c.send_at || undefined, lock: !!c.lock, accept_keys: c.accept_keys || [] }; }
+function body(c, out = false) { return { from: c.from, to: addrs(c.to), cc: addrs(c.cc), bcc: addrs(c.bcc), names: namesOf(c), subject: c.subject, text: c.text, html: out ? outHtml(c) : c.html || undefined, in_reply_to: c.ref, files: c.files, draft_id: c.draftId, send_at: c.send_at || undefined, lock: !!c.lock, accept_keys: c.accept_keys || [], send_key: out ? `${c.sendKey ||= sendKey()}${sameAs(c)}` : undefined }; }
+const sameAs = c => { const s = JSON.stringify([c.from, c.to, c.cc, c.bcc, c.subject, c.text, c.html || '', (c.files || []).map(f => [f.name, f.size]), c.send_at || '', c.lock ? [c.lock.pw, c.lock.days, c.lock.hint] : 0]); let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16).padStart(8, '0'); };
+const sendErr = x => (x instanceof TypeError ? "The connection dropped before foldoy answered, so it may have gone. Press Send again: it won't go twice." : x.message);
+const sendKey = () => Array.from(crypto.getRandomValues(new Uint8Array(18)), b => b.toString(16).padStart(2, '0')).join('');
 async function sendNow(c) {
   const b = body(c, true);
   const outside = c.lock ? (await mail.classify([...b.to, ...b.cc, ...b.bcc])).plain : [];
@@ -2118,21 +2167,31 @@ async function sendNow(c) {
   }
   return mail.send(b, S.me);
 }
+const draftWait = c => ((c.files || []).reduce((n, f) => n + (f.size || 0), 0) > 1e6 ? Math.max(500, (c.savedAt || 0) + 60000 - Date.now()) : 500);
+function filesChanged(c) { if (!c || S.compose !== c) return; c.dirty = true; c.ver = (c.ver || 0) + 1; clearTimeout(c.t); c.t = setTimeout(() => saveDraft(), 300); }
 async function saveDraft(quiet) {
-  const c = S.compose; if (!c || !c.dirty) return;
-  if (c.saving) { await c.saving; if (!c.dirty) return; }
+  const c = S.compose; if (!c || !c.dirty) return true;
+  if (c.saving) { await c.saving; if (!c.dirty) return true; }
   let done; c.saving = new Promise(r => { done = r; });
-  try { await saveDraftNow(c, quiet); } finally { c.saving = null; done(); }
+  try { return await saveDraftNow(c, quiet); } finally { c.saving = null; done(); }
 }
 async function saveDraftNow(c, quiet) {
-  if (!c.dirty) return;
+  if (!c.dirty) return true;
   if (S.compose === c) read();
-  if (!c.to && !c.subject && !c.text.trim()) return;
+  if (!c.to && !c.subject && !c.text.trim() && !c.files.length) return true;
   const v = c.ver || 0;
-  try { const r = await mail.saveDraft(c.draftId, body(c)); c.draftId = r.id; c.dirty = (c.ver || 0) !== v; try { sessionStorage.setItem('foldoy-composing', JSON.stringify({ id: r.id, ref: ['reply', 'replyall', 'forward'].includes(c.mode) ? c.ref : null, mode: c.mode, back: S.back })); } catch (_) {  } if (!quiet) { const st = $('#cst'); if (st) st.textContent = 'Draft saved'; } if (!$('#memenu') || $('#memenu').hidden) refreshRail(); } catch {}
+  const missed = [];
+  for (const f of c.files) if (!f.bytes && f.from) { try { f.bytes = await fileBytes(f.from.m, f.from.a); } catch { missed.push(f.name); } }
+  try { const r = await mail.saveDraft(c.draftId, body(c)); c.draftId = r.id; c.savedAt = Date.now(); c.saveErr = null; c.saveNote = missed.length ? `Draft saved without ${list3(missed)}` : null; c.dirty = (c.ver || 0) !== v; try { sessionStorage.setItem('foldoy-composing', JSON.stringify({ id: r.id, ref: ['reply', 'replyall', 'forward'].includes(c.mode) ? c.ref : null, mode: c.mode, back: S.back })); } catch (_) {  } if (!quiet) { const st = $('#cst'); if (st) st.textContent = c.saveNote || 'Draft saved'; } if (!$('#memenu') || $('#memenu').hidden) railQuiet(); return true; }
+  catch (x) { c.saveErr = x.message || "the server didn't answer"; if (!quiet) { const st = $('#cst'); if (st) st.textContent = "Draft not saved"; } return false; }
 }
 async function send() {
-  const c = S.compose; read();
+  const c = S.compose; if (!c || c.sendBusy) return;
+  c.sendBusy = true;
+  try { await sendOnce(c); } finally { c.sendBusy = false; }
+}
+async function sendOnce(c) {
+  read();
   const b = $('#csend'), err = $('#cerr'); err.textContent = ''; c.wall = null; if ($('#cwall')) $('#cwall').innerHTML = '';
   if (!addrs(c.to).length) { err.textContent = 'Add someone to send it to.'; $('#cto').focus(); return; }
   const bad = [...addrs(c.to), ...addrs(c.cc), ...addrs(c.bcc)].filter(a => !okAddr(a));
@@ -2156,8 +2215,8 @@ async function send() {
     try {
       await sendNow(c);
       c.sent = true; clearTimeout(c.t); S.compose = null; S.key = ''; S.focusList = true;
-      toast(`Sends ${snzWhen(c.send_at)}`); await refreshRail(); location.hash = /^#\/f\/drafts\/./.test(S.back) ? '#/f/drafts' : S.back;
-    } catch (x) { c.wall = limitWall(x, c); if (c.wall) $('#cwall').innerHTML = c.wall; else err.textContent = x.message; c.send_at = null; }
+      toast(`Sends ${snzWhen(c.send_at)}`); await railQuiet(); location.hash = /^#\/f\/drafts\/./.test(S.back) ? '#/f/drafts' : S.back;
+    } catch (x) { c.wall = limitWall(x, c); if (c.wall) $('#cwall').innerHTML = c.wall; else err.textContent = sendErr(x); c.send_at = null; }
     finally { if (b.isConnected) b.removeAttribute('aria-busy'); }
     return;
   }
@@ -2185,23 +2244,26 @@ async function send() {
   try {
     await sendNow(c);
     c.sent = true; clearTimeout(c.t); S.compose = null; S.key = ''; S.focusList = true;
-    toast('Sent'); await refreshRail();
+    toast('Sent'); await railQuiet();
     location.hash = /^#\/f\/drafts\/./.test(S.back) ? '#/f/drafts' : S.back;
-  } catch (x) { c.wall = limitWall(x, c); if (c.wall) $('#cwall').innerHTML = c.wall; else err.textContent = x.message; }
+  } catch (x) { c.wall = limitWall(x, c); if (c.wall) $('#cwall').innerHTML = c.wall; else err.textContent = sendErr(x); }
   finally { if (b.isConnected) { b.removeAttribute('aria-busy'); b.textContent = 'Send'; } }
 }
 let oopsN = 0;
 addEventListener('error', () => { if (oopsN++ < 3) api.oops('js-error'); });
 addEventListener('unhandledrejection', () => { if (oopsN++ < 3) api.oops('js-error'); });
 async function deliver(c) {
+  if (c.delivering) return;
+  c.delivering = true;
   try {
     await sendNow(c);
-    S.outbox = null; toast('Sent'); S.key = ''; await refreshRail();
+    S.outbox = null; toast('Sent'); S.key = ''; await railQuiet();
     if (/^#\/(f|s)\//.test(location.hash) || !location.hash) showMail({ folder: S.folder, q: S.q, id: S.sel || undefined, force: true });
   } catch (x) {
+    c.delivering = false;
     S.outbox = null; c.sent = false; c.wall = limitWall(x, c);
     if (!c.wall) api.oops('send-failed');
-    toast(`Not sent: ${x.message}`, { label: 'Open', run: () => { S.compose = c; location.hash = '#/compose'; } }, 12000);
+    toast(x instanceof TypeError ? sendErr(x) : `Not sent: ${x.message}`, { label: 'Open', run: () => { S.compose = c; location.hash = '#/compose'; } }, 12000);
   }
 }
 function laterMenu() {
@@ -2266,12 +2328,17 @@ function confirmEmpty() {
 }
 async function closeCompose(discard) {
   const c = S.compose;
-  if (!discard && c && !c.sent && (c.dirty || c.draftId)) setTimeout(() => toast('Draft saved'), 50);
+  if (!discard && c && !c.sent && (c.dirty || c.draftId)) {
+    clearTimeout(c.t);
+    if (!(await saveDraft(true))) { toast(`The draft couldn't be saved: ${c.saveErr.replace(/\.+$/, '')}. It is still open.`); return; }
+    if (S.compose !== c) return;
+    const said = c.saveNote || 'Draft saved'; setTimeout(() => toast(said), 50);
+  }
   if (discard) {
     clearTimeout(c.t); if (c.saving) await c.saving;
     const had = c.dirty || c.draftId, back = S.back;
-    if (c.draftId) await api.remove(c.draftId).catch(() => {});
-    c.draftId = null; c.sent = true; S.compose = null; S.key = ''; await refreshRail();
+    if (c.draftId) await api.discard(c.draftId).catch(() => {});
+    c.draftId = null; c.sent = true; S.compose = null; S.key = ''; await railQuiet();
     toast('Discarded', had ? { label: 'Undo', run: () => {
       if (S.compose && S.compose !== c) { S.compose.dirty = true; saveDraft(true); const d = $('#dock'); if (d) d.parentNode.removeChild(d); }
       c.sent = false; c.dirty = true; S.compose = c; S.back = back;
@@ -2326,10 +2393,12 @@ async function leave(m, n, nextId, said, undo, op = Promise.resolve()) {
     else if (nextId) { S.sel = nextId; S.open = null; pane.innerHTML = ''; markCurrent(nextId); }
     else { S.sel = null; S.open = null; markCurrent(null); emptyPane(); if (!splitPane()) setView('mail', 'list'); }
   }
-  toast(said, undo ? { label: 'Undo', run: async () => { await op.catch(() => {}); await undo(); S.key = ''; await refreshRail(); location.hash = `${from}/${m.id}`; } } : null);
+  toast(said, undo ? { label: 'Undo', run: async () => { await op.catch(() => {}); await undo(); S.key = ''; await railQuiet(); location.hash = `${from}/${m.id}`; } } : null);
   location.hash = nextId && !phone() ? `${S.back}/${nextId}` : S.back;
-  op.then(() => { railSoon(); repage(); }, x => { toast(`That didn't work: ${x.message}`); S.key = ''; refreshRail(); route(); });
+  op.then(() => { railSoon(); repage(); }, x => { toast(`That didn't work: ${x.message}`); S.key = ''; railQuiet(); routeSafe(); });
 }
+const ruleGoes = id => { const n = (S.rulesList || []).filter(r => r.action === 'move' && String(r.folder) === String(id)).length;
+  return n ? ` ${n === 1 ? 'The rule that moves mail into it is' : `The ${n} rules that move mail into it are`} deleted too.` : ''; };
 const folderLabel = id => (S.folders.find(f => f.id === id) || {}).name || id;
 function moveMenu(bulkMode, at) {
   const here = bulkMode ? S.folder : S.open?.folder;
@@ -2448,7 +2517,7 @@ function mailtoParts(s) {
 async function unsubscribe() {
   const m = S.open, b = $('#unsubnote'), box = $('#actnote'), u = m?.unsubscribe; if (!m || !b || !u) return;
   const say = (html, warn, link) => { if (S.open?.id === m.id && box) box.innerHTML = `<div class="note${warn ? ' warn' : ''}"><span class="t">${html}</span>${link ? `<a href="${esc(link)}" target="_blank" rel="noopener noreferrer">Open its page</a>` : ''}</div>`; };
-  const gone = () => { unsubbed.add(unsubKey(u)); if (S.open?.id === m.id) $('#unsubnote')?.remove(); };
+  const gone = told => { unsubbed.add(unsubKey(u)); m.unsubscribed = true; if (S.open?.id === m.id) $('#unsubnote')?.remove(); if (told) api.unsubscribe(m.id, { left: true }).catch(() => {}); };
   if (!u.one_click && u.url) {
     open(u.url, '_blank', 'noopener,noreferrer'); gone();
     return say(`The list's page opened ${openedIn()}. Finish there.`);
@@ -2465,7 +2534,7 @@ async function unsubscribe() {
     const from = m.via_alias && S.me.aliases_send !== false ? m.via_alias : me;
     try {
       await mail.send({ from, to: [to], cc: [], bcc: [], names: {}, subject, text, files: [], lock: false, accept_keys: [] }, S.me);
-      gone(); return say(`Unsubscribed. foldoy sent the request to <b>${esc(to)}</b>. It's in Sent.`);
+      gone(true); return say(`Unsubscribed. foldoy sent the request to <b>${esc(to)}</b>. It's in Sent.`);
     } catch (x) {
       b.disabled = false; b.removeAttribute('aria-busy');
       startCompose('new'); Object.assign(S.compose, { from, to, subject, text, dirty: true });
@@ -2700,7 +2769,7 @@ function drawSettings(sec) {
   const setup = setMode === 'tf-on' ? tfSetup : null;
   const pp = S.me.privacy_plus || {}, own = !!S.me.key?.own, rc = S.me.recovery, rec = S.me.recovery_email || { address: null, confirmed: false };
   const older = !!rc?.set && (S.me.keys || []).some(k => k.stale && k.kind !== 'own');
-  const au = async id => account.auth($('#' + id).value, S.me);
+  const au = async id => { const v = $('#' + id).value; if (!v) { $('#' + id).focus(); throw new Error('Enter your password.'); } return account.auth(v, S.me); };
   const tf = S.me.two_factor ? '<label class="label" for="tfa">Code from your authenticator app</label><div class="field"><input id="tfa" inputmode="numeric" autocomplete="one-time-code" maxlength="12"></div>' : '';
   const tfa = () => $('#tfa')?.value.trim() || undefined;
   const pw = id => `<label class="label" for="${id}">Your login password</label><div class="field"><input id="${id}" type="password" autocomplete="current-password"></div>${tf}`;
@@ -2773,7 +2842,7 @@ function drawSettings(sec) {
       ${group('h-folders', 'Folders', `<ul class="kv">${ownF.map(f => setMode === `fren-${f.id}`
           ? `<li><form class="inlinef" id="frenf" data-id="${esc(f.id)}"><label class="sr" for="frenin">New name</label><input id="frenin" value="${esc(f.name)}" maxlength="60"><button class="pill light sm" type="submit">Save</button><button class="pill line sm" type="button" data-set="">Cancel</button></form></li>`
           : row(`${icon('folder')}<b class="strong">${esc(f.name)}</b>`, '', setMode === `fdel-${f.id}` ? `<button class="pill danger sm" type="button" data-fdelok="${esc(f.id)}">Delete for good</button>${btn('', 'Cancel')}` : btn(`fren-${f.id}`, 'Rename') + btn(`fdel-${f.id}`, 'Delete'),
-            setMode === `fdel-${f.id}` ? 'Its mail moves to Archive.' : '')).join('')}
+            setMode === `fdel-${f.id}` ? `Its mail moves to Archive.${ruleGoes(f.id)}` : '')).join('')}
           <li><form class="inlinef" id="nff"><label class="sr" for="nfname">New folder</label><input id="nfname" maxlength="60" placeholder="New folder"><button class="pill line sm" type="submit">Add</button></form></li></ul>`)}
       ${group('h-rules', 'Rules', `<ul class="kv">${(S.rulesList || []).map(r => row(`<span class="rule-s">${ruleSays(r)}</span>`, '', `<button class="pill line sm" type="button" data-rdel="${esc(r.id)}">Delete</button>`)).join('')}
           <li><form class="inlinef rulef" id="rulef">
@@ -3245,13 +3314,15 @@ function drawSettings(sec) {
   const nff = $('#nff');
   if (nff) nff.addEventListener('submit', async e => {
     e.preventDefault(); const v = $('#nfname').value.trim(); if (!v) return;
-    try { await api.makeFolder(v); await refreshRail(); toast(`Folder ${v} made`); } catch (x) { toast(x.message); }
+    try { await api.makeFolder(v); await railQuiet(); toast(`Folder ${v} made`); } catch (x) { toast(x.message); }
     showSettings();
   });
   const frf = $('#frenf');
   if (frf) { $('#frenin').focus(); frf.addEventListener('submit', async e => {
     e.preventDefault();
-    try { await api.renameFolder(frf.dataset.id, $('#frenin').value.trim()); setMode = null; await refreshRail(); } catch (x) { toast(x.message); }
+    const v = $('#frenin').value.trim();
+    if (!v) { toast('Give the folder a name.'); $('#frenin').focus(); return; }
+    try { await api.renameFolder(frf.dataset.id, v); setMode = null; await railQuiet(); } catch (x) { toast(x.message); }
     showSettings();
   }); }
   const rlf = $('#rulef');
@@ -3540,7 +3611,7 @@ document.addEventListener('click', async e => {
   const rd = e.target.closest('[data-rdel]');
   if (rd) { try { await api.deleteRule(rd.dataset.rdel); S.rulesList = null; toast('Rule deleted'); } catch (x) { toast(x.message); } return showSettings(); }
   const fd = e.target.closest('[data-fdelok]');
-  if (fd) { try { await api.deleteFolder(fd.dataset.fdelok); setMode = null; S.rulesList = null; await refreshRail(); toast('Folder deleted. Its mail is in Archive.'); } catch (x) { toast(x.message); } return showSettings(); }
+  if (fd) { try { const r = await api.deleteFolder(fd.dataset.fdelok), n = r?.rules_deleted || 0; setMode = null; S.rulesList = null; await railQuiet(); toast(`Folder deleted. Its mail is in Archive.${n ? ` ${n === 1 ? 'Its rule was' : `Its ${n} rules were`} deleted too.` : ''}`); } catch (x) { toast(x.message); } return showSettings(); }
   const ub = e.target.closest('[data-unblock]');
   if (ub) { try { await api.unblock(ub.dataset.unblock); S.blockedList = null; toast('Unblocked'); } catch (x) { toast(x.message); } return showSettings(); }
   const go = e.target.closest('[data-goto]');
@@ -3549,7 +3620,7 @@ document.addEventListener('click', async e => {
   if (!t) return;
   if (t.closest('.set section')) S.focusSec = t.closest('section').getAttribute('aria-labelledby');
   if (t.dataset.copy) return copy(t.dataset.copy);
-  if (t.dataset.rmfile) { S.compose.files.splice(+t.dataset.rmfile, 1); return renderFiles(); }
+  if (t.dataset.rmfile) { S.compose.files.splice(+t.dataset.rmfile, 1); renderFiles(); return filesChanged(S.compose); }
   if (t.dataset.aliasAct) return aliasAct(t.dataset.aliasAct);
   if (t.dataset.alias) { e.preventDefault(); const as = await api.aliases().catch(() => []); const a = as.find(x => x.address === t.dataset.alias); location.hash = a ? `#/aliases/${a.id}` : '#/aliases'; return; }
   if (t.dataset.domShow) { openDom = t.dataset.domShow; domNote = ''; return showSettings(); }
@@ -3683,7 +3754,7 @@ document.addEventListener('click', async e => {
   if (a === 'copypw') { const f = $('#lkpw'); if (f) { copy(f.value); toast('Password copied'); } return; }
   if (a === 'lockon' || a === 'lockoff') { const c = S.compose; if (!c) return; read(); c.lock = a === 'lockon' ? { days: 7, hint: '', pw: pgp.newLockPassword() } : null; return showCompose(); }
   if (a === 'newalias') return composeAlias();
-  if (a === 'unsnooze') { const m = S.open; try { await api.unsnooze(m.id); } catch (x) { return toast(x.message); } toast('Back where it was, unread'); S.key = ''; await refreshRail(); location.hash = S.back; return; }
+  if (a === 'unsnooze') { const m = S.open; try { await api.unsnooze(m.id); } catch (x) { return toast(x.message); } toast('Back where it was, unread'); S.key = ''; await railQuiet(); location.hash = S.back; return; }
   if (a === 'block') return blockAsk();
   if (a === 'blockok') return blockNow();
   if (a === 'blockno') { $('#actnote').innerHTML = ''; return; }
@@ -3705,7 +3776,7 @@ document.addEventListener('click', async e => {
   if (a === 'rail') return openRail();
   if (a === 'memenu') return;
   if (a === 'rail-close') return closeRail();
-  if (a === 'lock') { pgp.lockTab(); mail.forgetText(); toast('Your key is unloaded'); S.key = ''; return route(); }
+  if (a === 'lock') { pgp.lockTab(); mail.forgetText(); toast('Your key is unloaded'); S.key = ''; return routeSafe(); }
   if (a === 'unlock') { if (location.hash.startsWith('#/settings')) location.hash = '#/f/inbox'; S.sel = null; setView('mail', 'pane'); return loadKeyPane(); }
   if (a === 'images') return showImages();
   if (a === 'showkey') { S.keyShow?.(); return; }
@@ -4051,14 +4122,14 @@ async function screenerAnswer(addr, ans, domain) {
   S.scr = { ...d, waiting: (S.scr?.waiting || []).filter(x => !x.gone) };
   S.items = S.scr.waiting.map(w => w.newest); S.blockedList = null;
   toast(ans === 'no' ? `Blocked ${addr}` : domain ? `Everyone at ${addr.split('@')[1]} is let in` : `${addr} is let in`);
-  await refreshRail();
+  await railQuiet();
   if (S.folder === 'screener') { drawScreenerList(); if (!opened && !S.sel) emptyPane(); if (opened) location.hash = ans === 'yes' && S.open ? `#/f/inbox/${S.open.id}` : '#/f/screener'; }
   else if (opened) { $('.scrnote')?.remove(); }
 }
 document.addEventListener('click', e => {
   if (S.folder !== 'screener' || app.dataset.view !== 'mail' || !e.target.closest('[data-act="refresh"]')) return;
   e.stopImmediatePropagation(); e.preventDefault();
-  refreshRail(); loadScreener(() => { S.items = S.scr.waiting.map(w => w.newest); drawScreenerList(); });
+  railQuiet(); loadScreener(() => { S.items = S.scr.waiting.map(w => w.newest); drawScreenerList(); });
 }, true);
 document.addEventListener('click', async e => {
   const mv = e.target.closest('[data-mv]');
@@ -4080,12 +4151,17 @@ document.addEventListener('click', async e => {
     const on = sw.getAttribute('aria-checked') !== 'true';
     sw.setAttribute('aria-busy', 'true');
     try { S.scr = await api.screenerSet(on); await mail.open(S.scr.waiting.map(w => w.newest)); toast(on ? 'Screener on' : 'Screener off. Waiting mail is in your Inbox.'); } catch (x) { toast(x.message); }
-    await refreshRail(); S.focusSec = 'h-scr'; drawSettings('screener');
+    await railQuiet(); S.focusSec = 'h-scr'; drawSettings('screener');
   }
 });
 
 new MutationObserver(() => $$('i[data-w]').forEach(i => { i.style.width = `${i.dataset.w}%`; i.removeAttribute('data-w'); })).observe(document.body, { subtree: true, childList: true });
 
-boot();
+boot().catch(e => {
+  setView('pending', 'pane');
+  pane.innerHTML = `<div class="blank"><div class="state"><h2>Your mail didn't load.</h2><p>${esc(e?.message || "foldoy didn't answer.")}</p>
+    <div class="acts"><button class="pill light md" type="button" id="bootretry">Try again</button></div></div></div>`;
+  $('#bootretry')?.addEventListener('click', () => location.reload());
+});
 
 document.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse' && e.target.closest?.('.field > button.end')) e.preventDefault(); }, true);
