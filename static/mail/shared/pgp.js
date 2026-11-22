@@ -105,8 +105,9 @@ export async function remember(address) { if (wrapKey) await tx('readwrite', s =
 export async function restore(address, keys) {
   try { const w = await tx('readonly', s => s.get(address)); if (!w) return false; await unlockAll(w, keys); return true; } catch { return false; }
 }
-export async function forget(address) { ring = []; wrapKey = null; extra = []; rowMem.clear(); await tx('readwrite', s => s.delete(address)).catch(() => {}); await txIn('cache', 'readwrite', s => s.clear()).catch(() => {}); await dropSearch(address); }
-export async function forgetAll() { ring = []; wrapKey = null; extra = []; rowMem.clear(); await tx('readwrite', s => s.clear()).catch(() => {}); await txIn('cache', 'readwrite', s => s.clear()).catch(() => {}); await dropSearch(null); }
+const soon = (p, ms) => Promise.race([Promise.resolve(p).catch(() => {}), new Promise(r => setTimeout(r, ms))]);
+export async function forget(address) { ring = []; wrapKey = null; extra = []; rowMem.clear(); await soon(tx('readwrite', s => s.delete(address)), 3000); await soon(txIn('cache', 'readwrite', s => s.clear()), 3000); await soon(dropSearch(address), 1500); }
+export async function forgetAll() { ring = []; wrapKey = null; extra = []; rowMem.clear(); await soon(tx('readwrite', s => s.clear()), 3000); await soon(txIn('cache', 'readwrite', s => s.clear()), 3000); await soon(dropSearch(null), 1500); }
 export const deviceKey = () => wrapKey;
 async function dropSearch(address) {
   const del = name => new Promise(res => { try { const r = indexedDB.deleteDatabase(name); r.onsuccess = r.onerror = r.onblocked = () => res(); } catch { res(); } });
@@ -145,6 +146,37 @@ export async function rowPut(id, row) {
     const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: enc(id) }, wrapKey, enc(JSON.stringify(row)));
     await txIn('cache', 'readwrite', s => s.put({ iv, data }, id)); } catch {}
 }
+
+const keptDb = () => new Promise((res, rej) => { const r = indexedDB.open('foldoy-kept', 1); r.onupgradeneeded = () => { r.result.createObjectStore('kept'); r.result.createObjectStore('files'); }; r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); r.onblocked = () => rej(new Error('blocked')); });
+const keptTx = async (stores, mode, fn) => { const db = await keptDb(); try { return await new Promise((res, rej) => { const t = db.transaction(stores, mode), q = fn(t); t.oncomplete = () => res(q && q.result); t.onerror = t.onabort = () => rej(t.error); }); } finally { db.close(); } };
+const sealTo = async (armoredKey, part) => { const o = await load(); return o.encrypt({ message: await o.createMessage(part), encryptionKeys: await o.readKey({ armoredKey }), format: part.binary ? 'binary' : 'armored' }); };
+const filesOf = k => IDBKeyRange.bound(`${k}|`, `${k}|\uffff`);
+export async function keptPut(address, id, words, files, armoredKey) {
+  const k = `${address}|${id}`;
+  const have = new Set((await keptTx('files', 'readonly', t => t.objectStore('files').getAllKeys(filesOf(k)))) || []);
+  const fresh = [];
+  for (const f of files) if (!have.has(`${k}|${f.id}`)) fresh.push([`${k}|${f.id}`, await sealTo(armoredKey, { binary: f.bytes })]);
+  const sealed = await sealTo(armoredKey, { text: JSON.stringify(words) }), now = new Set(files.map(f => `${k}|${f.id}`));
+  await keptTx(['kept', 'files'], 'readwrite', t => {
+    const fs = t.objectStore('files');
+    for (const [fk, bytes] of fresh) fs.put(bytes, fk);
+    for (const old of have) if (!now.has(old)) fs.delete(old);
+    return t.objectStore('kept').put({ address, id, at: Date.now(), sealed }, k);
+  });
+}
+export async function keptList() { return (await keptTx('kept', 'readonly', t => t.objectStore('kept').getAll())) || []; }
+export async function keptOpen(rec) {
+  const o = await load(), keys = [...ring.map(k => k.priv), ...extra];
+  if (!keys.length) throw new Error('nokey');
+  const words = JSON.parse((await o.decrypt({ message: await o.readMessage({ armoredMessage: rec.sealed }), decryptionKeys: keys })).data), files = {};
+  const k = `${rec.address}|${rec.id}`;
+  for (const f of words.files || []) {
+    const m = await keptTx('files', 'readonly', t => t.objectStore('files').get(`${k}|${f.id}`));
+    if (m) files[f.id] = (await o.decrypt({ message: await o.readMessage({ binaryMessage: m }), decryptionKeys: keys, format: 'binary' })).data;
+  }
+  return { words, files };
+}
+export async function keptDrop(address, id) { const k = `${address}|${id}`; await keptTx(['kept', 'files'], 'readwrite', t => { t.objectStore('files').delete(filesOf(k)); return t.objectStore('kept').delete(k); }); }
 
 export async function decrypt(armored, signerKey) {
   const o = await load();

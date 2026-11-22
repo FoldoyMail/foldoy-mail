@@ -26,7 +26,7 @@ async function live(method, path, body, form) {
     body: method === 'GET' || body === undefined ? undefined : form || JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
   if (j && j.csrf_token) csrf = j.csrf_token;
-  if (r.status === 401 && j.error === 'Sign in first.') { forgetRead(); await pgp.forgetAll().catch(() => {}); }
+  if (r.status === 401 && j.error === 'Sign in first.') { forgetRead(); await pgp.forgetAll().catch(() => {}); try { dispatchEvent(new CustomEvent('foldoy-signed-out')); } catch (_) {  } }
   if (!r.ok) throw new ApiError(j.error || 'Something went wrong. Try again.', r.status, j);
   return j;
 }

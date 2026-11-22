@@ -167,6 +167,7 @@ async function start() {
   setInterval(() => { if (!document.hidden) checkNew(); }, 30e3);
   setInterval(() => { if (document.hidden) checkNew(); }, 60e3);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) checkNew(); });
+  if (keptFlag()) await keptFirst().catch(() => {});
   window.addEventListener('hashchange', routeSafe);
   if (!location.hash) history.replaceState(null, '', '#/f/inbox');
   routeSafe();
@@ -231,7 +232,7 @@ const notifyOn = () => recall('foldoy-notify') === '1' && 'Notification' in wind
 const pendingDone = () => (sending.size ? Promise.race([Promise.allSettled([...sending.values()]), new Promise(r => setTimeout(r, 8000))]) : Promise.resolve());
 let againT = 0;
 async function checkNew() {
-  if (S.me.mailbox !== 'active' || S.me.sending?.hold) return;
+  if (S.out || S.me.mailbox !== 'active' || S.me.sending?.hold) return;
   await pendingDone();
   const gen = railGen;
   const stale = () => { if (gen === railGen) return false; clearTimeout(againT); againT = setTimeout(checkNew, 2000); return true; };
@@ -601,7 +602,7 @@ function setTitle() {
 addEventListener('hashchange', setTitle);
 addEventListener('foldoy-moved', () => railSoon());
 let lookedAt = 0;
-const lookAgain = () => { if (Date.now() - lookedAt < 5000 || !S.me || S.me.mailbox !== 'active' || !S.folders.length) return; lookedAt = Date.now(); checkNew(); };
+const lookAgain = () => { if (S.out) { backIn().catch(() => {}); return; } if (Date.now() - lookedAt < 5000 || !S.me || S.me.mailbox !== 'active' || !S.folders.length) return; lookedAt = Date.now(); checkNew(); };
 addEventListener('focus', lookAgain);
 addEventListener('pageshow', e => { if (e.persisted) lookAgain(); });
 function folderName() { return S.q ? 'Search' : (S.folders.find(f => f.id === S.folder) || { name: PLACE_NAMES[S.folder] || 'Inbox' }).name; }
@@ -1894,6 +1895,7 @@ async function showCompose() {
   f.addEventListener('input', e => { c.dirty = true; c.ver = (c.ver || 0) + 1; const st = $('#cst'); if (st && st.textContent) st.textContent = ''; read(); clearTimeout(c.t); c.t = setTimeout(() => saveDraft(), draftWait(c)); if (/^c(to|cc|bcc)$/.test(e.target.id)) { clearTimeout(c.w); c.w = setTimeout(whoGets, 350); } });
   whoGets();
   f.addEventListener('submit', e => { e.preventDefault(); send(); });
+  if (S.out) outLook();
   $('#cfile').addEventListener('change', async e => {
     for (const file of e.target.files) {
       if (c.files.reduce((n, f) => n + f.size, 0) + file.size > 12e6) { $('#cerr').textContent = 'Files can be up to 12 MB in all.'; continue; }
@@ -2175,7 +2177,7 @@ async function sendNow(c) {
   }
   return mail.send(b, S.me);
 }
-const draftWait = c => ((c.files || []).reduce((n, f) => n + (f.size || 0), 0) > 1e6 ? Math.max(500, (c.savedAt || 0) + 60000 - Date.now()) : 500);
+const draftWait = c => (!S.out && (c.files || []).reduce((n, f) => n + (f.size || 0), 0) > 1e6 ? Math.max(500, (c.savedAt || 0) + 60000 - Date.now()) : 500);
 function filesChanged(c) { if (!c || S.compose !== c) return; c.dirty = true; c.ver = (c.ver || 0) + 1; clearTimeout(c.t); c.t = setTimeout(() => saveDraft(), 300); }
 async function saveDraft(quiet) {
   const c = S.compose; if (!c || !c.dirty) return true;
@@ -2185,13 +2187,139 @@ async function saveDraft(quiet) {
 }
 async function saveDraftNow(c, quiet) {
   if (!c.dirty) return true;
+  if (S.out) return keptInstead(c);
   if (S.compose === c) read();
   if (!c.to && !c.subject && !c.text.trim() && !c.files.length) return true;
   const v = c.ver || 0;
   const missed = [];
   for (const f of c.files) if (!f.bytes && f.from) { try { f.bytes = await fileBytes(f.from.m, f.from.a); } catch { missed.push(f.name); } }
   try { const r = await mail.saveDraft(c.draftId, body(c)); c.draftId = r.id; c.savedAt = Date.now(); c.saveErr = null; c.saveNote = missed.length ? `Draft saved without ${list3(missed)}` : null; c.dirty = (c.ver || 0) !== v; try { sessionStorage.setItem('foldoy-composing', JSON.stringify({ id: r.id, ref: ['reply', 'replyall', 'forward'].includes(c.mode) ? c.ref : null, mode: c.mode, back: S.back })); } catch (_) {  } if (!quiet) { const st = $('#cst'); if (st) st.textContent = c.saveNote || 'Draft saved'; } if (!$('#memenu') || $('#memenu').hidden) railQuiet(); return true; }
-  catch (x) { c.saveErr = x.message || "the server didn't answer"; if (!quiet) { const st = $('#cst'); if (st) st.textContent = "Draft not saved"; } return false; }
+  catch (x) { if (S.out) return keptInstead(c); c.saveErr = x.message || "the server didn't answer"; if (!quiet) { const st = $('#cst'); if (st) st.textContent = "Draft not saved"; } return false; }
+}
+
+const KEPT_FLAG = 'foldoy-kept';
+const keptFlag = () => { try { return localStorage.getItem(KEPT_FLAG) === '1'; } catch (_) { return false; } };
+const KEPT_DAYS = 60;
+function keep(c) { if (!c) return Promise.resolve(false); const run = (c.keeping || Promise.resolve()).catch(() => {}).then(() => keepNow(c)); c.keeping = run; return run; }
+async function keepNow(c) {
+  const pub = S.me && S.me.key && S.me.key.public_key;
+  if (!c || c.gone || !pub || !S.me.address) return false;
+  if (S.compose === c) read();
+  if (!c.to && !c.subject && !(c.text || '').trim() && !c.files.length) return true;
+  c.keptId = c.keptId || sendKey();
+  const b = body(c);
+  const files = c.files.filter(f => f.bytes).map(f => ({ id: (f.keptId = f.keptId || sendKey()), name: f.name, type: f.type, size: f.size, bytes: typeof f.bytes === 'function' ? f.bytes() : f.bytes }));
+  const words = { from: b.from, to: b.to, cc: b.cc, bcc: b.bcc, names: b.names, subject: b.subject, text: b.text, html: b.html, files: files.map(f => ({ id: f.id, name: f.name, type: f.type, size: f.size })),
+    missed: c.files.filter(f => !f.bytes).map(f => f.name),
+    draftId: c.draftId || null, mode: c.mode || null, ref: ['reply', 'replyall', 'forward'].includes(c.mode) ? c.ref : null, back: S.back || '#/f/inbox' };
+  try { await pgp.keptPut(S.me.address, c.keptId, words, files, pub); c.kept = true; (S.keptIds = S.keptIds || new Set()).add(c.keptId); try { localStorage.setItem(KEPT_FLAG, '1'); } catch (_) {  } }
+  catch (_) { c.kept = false; }
+  if (c.gone) { await pgp.keptDrop(S.me.address, c.keptId).catch(() => {}); c.kept = false; if (S.keptIds) S.keptIds.delete(c.keptId); return false; }
+  const st = S.compose === c && $('#cst'); if (st) st.textContent = c.kept ? 'Kept on this device' : 'Not saved';
+  if (S.out && S.compose === c) outLook();
+  return c.kept;
+}
+async function keptInstead(c) { const ok = await keep(c); c.saveErr = ok ? null : "you've been signed out, and this browser couldn't keep it"; c.saveNote = ok ? 'Kept on this device' : null; return ok; }
+addEventListener('foldoy-signed-out', () => { if (!S.me || !S.me.address || S.leaving) return; signedOut().catch(() => {}); });
+async function signedOut() {
+  S.out = true;
+  const o = S.outbox;
+  if (o && !o.c.delivering) { clearTimeout(o.timer); S.outbox = null; await putBack(o.c); }
+  if (S.compose) await keep(S.compose);
+  outNotice();
+}
+async function putBack(c) {
+  c.sent = false; c.delivering = false;
+  if (!S.compose) { S.compose = c; if (!/^#\/compose/.test(location.hash)) S.back = location.hash || '#/f/inbox'; if (location.hash === '#/compose') showCompose(); else location.hash = '#/compose'; }
+  await keep(c);
+}
+const OUT_KEPT = "You've been signed out. What you wrote is kept on this device, encrypted.";
+const OUT_LOST = "You've been signed out. What you wrote couldn't be kept on this device: copy it before you sign in.";
+const signIn = () => { S.leaving = true; location.href = '/login/'; };
+function outLook() {
+  const c = S.compose, b = $('#csend'), err = $('#cerr'); if (!c || !b || !err) return false;
+  b.textContent = 'Sign in'; b.title = 'Sign in to send this'; b.dataset.out = '1'; b.disabled = false;
+  const later = $('#cform [data-act="later"]'); if (later) later.disabled = true;
+  const wrote = c.to || c.subject || (c.text || '').trim() || c.files.length;
+  err.textContent = !wrote ? "You've been signed out." : c.kept === false ? OUT_LOST : OUT_KEPT;
+  const t = $('.toast'); if (t) t.classList.remove('on');
+  return true;
+}
+function outNotice() {
+  clearTimeout(S.outT);
+  S.outT = setTimeout(() => {
+    if (outLook()) return;
+    toast(S.keptIds && S.keptIds.size ? OUT_KEPT : "You've been signed out.", { label: 'Sign in', run: signIn }, 6 * 3600e3);
+  }, 150);
+}
+async function notSentOut(c) {
+  const said = $('#csend') && $('#csend').dataset.out, ok = await keep(c);
+  if (!said) { outLook(); return; }
+  if (!ok && !confirm("What you wrote couldn't be kept on this device. Signing in now will lose it.\n\nSign in anyway?")) return;
+  signIn();
+}
+let probing = false;
+async function backIn() {
+  if (probing || S.leaving) return; probing = true;
+  try { await api.session(); } catch (_) { probing = false; return; }
+  if (S.compose) await keep(S.compose);
+  S.leaving = true; location.reload();
+}
+async function keptFirst() {
+  let recs = []; try { recs = await pgp.keptList(); } catch (_) { return; }
+  const now = Date.now(), fresh = r => now - r.at <= KEPT_DAYS * 86400e3;
+  for (const r of recs.filter(r => !fresh(r))) await pgp.keptDrop(r.address, r.id).catch(() => {});
+  const mine = recs.filter(r => fresh(r) && r.address === S.me.address).sort((x, y) => x.at - y.at);
+  if (!recs.some(fresh)) { try { localStorage.removeItem(KEPT_FLAG); } catch (_) {  } }
+  if (!mine.length) return;
+  try { sessionStorage.removeItem('foldoy-composing'); } catch (_) {  }
+  if (/^#\/compose/.test(location.hash)) history.replaceState(null, '', '#/f/inbox');
+  bringBack(mine).catch(() => {});
+}
+const okId = v => { const t = typeof v === 'number' ? String(v) : v; return typeof t === 'string' && /^[A-Za-z0-9_-]{1,120}$/.test(t) ? t : null; };
+async function bringBack(mine) {
+  const coming = 'Bringing back the message you were writing.';
+  const slow = setTimeout(() => { if (!S.out && !S.leaving && !S.compose) toast(coming, null, 120000); }, 1500);
+  try { return await bringBackNow(mine); }
+  finally { clearTimeout(slow); const t = $('.toast.on'); if (t && t.textContent.startsWith(coming)) t.classList.remove('on'); }
+}
+async function bringBackNow(mine) {
+  if (S.ring) await S.ring;
+  let last = null, why = '', missed = [], n = 0;
+  for (const rec of mine) {
+    let k; try { k = await pgp.keptOpen(rec); } catch (_) { why = "this account's key doesn't open it"; continue; }
+    const w = k.words, c = { ...w, files: (w.files || []).filter(f => k.files[f.id]).map(f => ({ name: f.name, type: f.type, bytes: k.files[f.id] })) };
+    const draftId = okId(w.draftId);
+    let r = null;
+    try { r = await mail.saveDraft(draftId, c); }
+    catch (x) {
+      if (draftId && x.status && x.status !== 401) { try { r = await mail.saveDraft(null, c); } catch (y) { why = y.message || "the server didn't answer"; } }
+      else why = x.message || "the server didn't answer";
+    }
+    if (!r || !r.id) continue;
+    await pgp.keptDrop(rec.address, rec.id).catch(() => {});
+    last = { id: r.id, ref: okId(w.ref), mode: ['reply', 'replyall', 'forward'].includes(w.mode) ? w.mode : undefined, back: typeof w.back === 'string' && /^#\/[A-Za-z0-9/_%.~+@=-]*$/.test(w.back) ? w.back : '#/f/inbox' }; n++;
+    missed = missed.concat(w.missed || []);
+  }
+  if (!(await pgp.keptList().catch(() => [1])).length) { try { localStorage.removeItem(KEPT_FLAG); } catch (_) {  } }
+  if (S.out || S.leaving) return;
+  if (n) railSoon();
+  const again = { label: 'Try again', run: () => keptFirst().catch(() => {}) };
+  if (why) return toast(`What you wrote before you were signed out is still kept on this device. It couldn't go to Drafts: ${why.replace(/\.+$/, '')}.`, again, 30000);
+  if (!last) return;
+  if (S.compose) {
+    const said = n > 1 ? 'What you wrote before you were signed out is in Drafts.' : 'The message you were writing before you were signed out is in Drafts.';
+    const t = setInterval(() => {
+      if (S.compose || S.outbox) return;
+      clearInterval(t);
+      if (!S.out && !S.leaving) setTimeout(() => toast(said, { label: 'Open', run: () => { location.hash = `#/f/drafts/${last.id}`; } }, 15000), 2500);
+    }, 1000);
+    return;
+  }
+  try { sessionStorage.setItem('foldoy-composing', JSON.stringify(last)); } catch (_) {  }
+  S.back = /^#\/compose/.test(location.hash) ? last.back : (location.hash || last.back);
+  location.hash = '#/compose';
+  if (missed.length) setTimeout(() => toast(`Brought back without ${list3(missed)}: add ${missed.length > 1 ? 'them' : 'it'} again.`, null, 15000), 1500);
 }
 async function send() {
   const c = S.compose; if (!c || c.sendBusy) return;
@@ -2201,6 +2329,7 @@ async function send() {
 async function sendOnce(c) {
   read();
   const b = $('#csend'), err = $('#cerr'); err.textContent = ''; c.wall = null; if ($('#cwall')) $('#cwall').innerHTML = '';
+  if (S.out) return notSentOut(c, err);
   if (!addrs(c.to).length) { err.textContent = 'Add someone to send it to.'; $('#cto').focus(); return; }
   const bad = [...addrs(c.to), ...addrs(c.cc), ...addrs(c.bcc)].filter(a => !okAddr(a));
   if (bad.length) { err.textContent = `${list3(bad)} ${bad.length > 1 ? 'are not email addresses' : 'is not an email address'}. Fix or remove ${bad.length > 1 ? 'them' : 'it'}.`; $('#cto').focus(); return; }
@@ -2217,7 +2346,9 @@ async function sendOnce(c) {
       c.accept_keys = [...(c.accept_keys || []), ...moved.map(x => x.now)];
     }
   } catch {}
+  if (S.out) return notSentOut(c, err);
   clearTimeout(c.t); if (c.saving) await c.saving.catch(() => {});
+  if (S.out) return notSentOut(c, err);
   if (c.send_at) {
     b.setAttribute('aria-busy', 'true');
     try {
@@ -2265,10 +2396,12 @@ async function deliver(c) {
   c.delivering = true;
   try {
     await sendNow(c);
+    if (c.keptId) { c.gone = true; await pgp.keptDrop(S.me.address, c.keptId).catch(() => {}); c.kept = false; if (S.keptIds) S.keptIds.delete(c.keptId); }
     S.outbox = null; toast('Sent'); S.key = ''; await railQuiet();
     if (/^#\/(f|s)\//.test(location.hash) || !location.hash) showMail({ folder: S.folder, q: S.q, id: S.sel || undefined, force: true });
   } catch (x) {
     c.delivering = false;
+    if (S.out) { if (S.outbox && S.outbox.c === c) S.outbox = null; await putBack(c); outNotice(); return; }
     S.outbox = null; c.sent = false; c.wall = limitWall(x, c);
     if (!c.wall) api.oops('send-failed');
     toast(x instanceof TypeError ? sendErr(x) : `Not sent: ${x.message}`, { label: 'Open', run: () => { S.compose = c; location.hash = '#/compose'; } }, 12000);
@@ -2340,16 +2473,18 @@ async function closeCompose(discard) {
     clearTimeout(c.t);
     if (!(await saveDraft(true))) { toast(`The draft couldn't be saved: ${c.saveErr.replace(/\.+$/, '')}. It is still open.`); return; }
     if (S.compose !== c) return;
-    const said = c.saveNote || 'Draft saved'; setTimeout(() => toast(said), 50);
+    const said = c.saveNote || 'Draft saved'; if (S.out) setTimeout(outNotice, 400); else setTimeout(() => toast(said), 50);
   }
   if (discard) {
     clearTimeout(c.t); if (c.saving) await c.saving;
     const had = c.dirty || c.draftId, back = S.back;
+    c.gone = true;
+    if (c.keptId) { await pgp.keptDrop(S.me.address, c.keptId).catch(() => {}); c.kept = false; if (S.keptIds) S.keptIds.delete(c.keptId); }
     if (c.draftId) await api.discard(c.draftId).catch(() => {});
     c.draftId = null; c.sent = true; S.compose = null; S.key = ''; await railQuiet();
     toast('Discarded', had ? { label: 'Undo', run: () => {
       if (S.compose && S.compose !== c) { S.compose.dirty = true; saveDraft(true); const d = $('#dock'); if (d) d.parentNode.removeChild(d); }
-      c.sent = false; c.dirty = true; S.compose = c; S.back = back;
+      c.sent = false; c.gone = false; c.dirty = true; S.compose = c; S.back = back;
       if (location.hash === '#/compose') showCompose(); else location.hash = '#/compose';
       setTimeout(() => { if (S.compose === c) saveDraft(true); }, 400);
     } } : null, 8000);
@@ -3828,7 +3963,11 @@ document.addEventListener('click', async e => {
   if (a === 'print') { closeMore(); window.print(); return; }
   if (a === 'original') { closeMore(); const w = window.open('', '_blank'); try { const r = await fetch(`/mail/api/messages/${encodeURIComponent(S.open.id)}/raw`, { credentials: 'same-origin' }); const t = r.ok ? await r.text() : `From: ${S.open.from.addr}\nTo: ${S.open.to.map(p => p.addr).join(', ')}\nDate: ${S.open.date}\nSubject: ${S.open.subject}\n\n${S.open.text || ''}`; if (w) { w.document.title = S.open.subject || 'Original'; const pre = w.document.createElement('pre'); pre.textContent = t; pre.style.cssText = 'white-space:pre-wrap;font:13px/1.5 ui-monospace,monospace;padding:16px'; w.document.body.append(pre); } } catch { if (w) w.close(); toast("The original couldn't be loaded."); } return; }
   if (a === 'junk') { const j = S.folders.find(f => f.role === 'junk'); if (j) moveTo(j.id); return; }
-  if (a === 'logout') { S.leaving = true; idx.stop(); await account.logout(S.me.address); location.href = '/login/'; }
+  if (a === 'logout') {
+    S.leaving = true; idx.stop();
+    if (!S.out) { try { for (const r of await pgp.keptList()) if (r.address === S.me.address) await pgp.keptDrop(r.address, r.id); } catch (_) {  } }
+    await account.logout(S.me.address); location.href = '/login/';
+  }
 });
 
 function meMenu(open) {
