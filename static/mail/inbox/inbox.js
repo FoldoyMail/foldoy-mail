@@ -2425,8 +2425,24 @@ async function sendOnce(c) {
   finally { if (b.isConnected) { b.removeAttribute('aria-busy'); b.textContent = 'Send'; } }
 }
 let oopsN = 0;
-addEventListener('error', () => { if (oopsN++ < 3) api.oops('js-error'); });
-addEventListener('unhandledrejection', () => { if (oopsN++ < 3) api.oops('js-error'); });
+const ownPlace = (file, line, col) => {
+  try {
+    const u = new URL(file, location.href); if (u.origin !== location.origin || !/^\/static\/mail\//.test(u.pathname)) return null;
+    const name = u.pathname.split('/').pop().replace(/\.[0-9a-f]{8,16}(?=\.js$)/, '');
+    return /^[a-z0-9.-]{1,40}\.js$/.test(name) ? `${name}:${line | 0}:${col | 0}` : null;
+  } catch (_) { return null; }
+};
+function whereOf(err, file, line, col) {
+  const kind = err && /^[A-Za-z]{1,30}$/.test(err.name || '') ? `${err.name}${Number.isInteger(err.status) && err.status >= 100 && err.status < 600 ? ` ${err.status}` : ''} ` : '';
+  const frames = [...String((err && err.stack) || '').matchAll(/(https?:\/\/[^\s()@]+?\.js):(\d+):(\d+)/g)].map(m => ownPlace(m[1], +m[2], +m[3]));
+  const own = [...new Set(frames.filter(Boolean))].slice(0, 3);
+  if (!own.length && file) { const p = ownPlace(file, line, col); if (p) own.push(p); }
+  return kind + (own.length ? own.join('<') : (frames.length || file ? 'elsewhere' : 'unknown'));
+}
+const whereSafe = (...a) => { try { return whereOf(...a); } catch (_) { return 'unknown'; } };
+const NOT_AN_ERROR = /^ResizeObserver loop /;
+addEventListener('error', e => { if (NOT_AN_ERROR.test(e.message || '')) return; if (oopsN++ < 3) api.oops('js-error', whereSafe(e.error, e.filename, e.lineno, e.colno)); });
+addEventListener('unhandledrejection', e => { if (oopsN++ < 3) api.oops('js-error', whereSafe(e.reason)); });
 async function deliver(c) {
   if (c.delivering) return;
   c.delivering = true;

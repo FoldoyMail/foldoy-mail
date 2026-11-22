@@ -50,7 +50,7 @@ function withKey(s) {
 const sess = p => p.then(withKey);
 
 export const api = {
-  oops: kind => call('POST', 'oops', { kind }).catch(() => {}),
+  oops: (kind, at) => call('POST', 'oops', { kind, ...(at ? { at } : {}) }).catch(() => {}),
   check: (name, domain) => call('GET', `check?${qs({ name, domain })}`),
   prelogin: login => call('GET', `prelogin?${qs({ login })}`),
   signup: body => sess(call('POST', 'signup', body)),
