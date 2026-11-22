@@ -15,5 +15,15 @@
   d.setAttribute('data-rail', !touch && (pref ? pref === 'min' : mq('(max-width: 1180px)')) ? 'min' : 'full');
   var names = { drafts: 'Drafts', sent: 'Sent', starred: 'Starred', snoozed: 'Snoozed', scheduled: 'Scheduled', archive: 'Archive', junk: 'Junk', trash: 'Trash', all: 'All mail' };
   var m = location.hash.match(/^#\/f\/([a-z]+)/), title = /^#\/s\//.test(location.hash) ? 'Search' : /^#\/settings/.test(location.hash) ? 'Settings' : /^#\/aliases/.test(location.hash) ? 'Aliases' : m && names[m[1]];
+  if (document.querySelector('meta[name="foldoy-fast-boot"]') && window.fetch && window.Promise) {
+    var ask = function (path) {
+      return fetch('/mail/api/' + path, { method: 'GET', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } })
+        .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { early: true, ok: r.ok, status: r.status, j: j }; }); },
+          function () { return null; });
+    };
+    var early = { session: ask('session'), folders: ask('folders') };
+    if (!location.hash || /^#\/f\/inbox\/?$/.test(location.hash)) early['messages?folder=inbox'] = ask('messages?folder=inbox');
+    window.__foldoyEarly = early;
+  }
   if (title) { var mo = new MutationObserver(function () { var h = document.querySelector('#list .lh h1'); if (h && h.textContent) { if (h.textContent === 'Inbox') h.textContent = title; mo.disconnect(); } }); mo.observe(document.documentElement, { childList: true, subtree: true }); setTimeout(function () { mo.disconnect(); }, 4000); }
 })();

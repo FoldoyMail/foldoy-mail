@@ -19,12 +19,15 @@ let csrf = '';
 
 export class ApiError extends Error { constructor(msg, status, extra) { super(msg); this.status = status; Object.assign(this, extra || {}); } }
 
+const EARLY = (typeof window !== 'undefined' && window.__foldoyEarly) || null;
+const early = path => { const p = EARLY && EARLY[path]; if (!p) return null; delete EARLY[path]; return p; };
 async function live(method, path, body, form) {
   if (method !== 'GET' && !csrf) await live('GET', 'session').catch(() => {});
-  const r = await fetch(BASE + path, { method, credentials: 'same-origin',
+  const e = method === 'GET' && !form ? early(path) : null;
+  const r = (e && await e) || await fetch(BASE + path, { method, credentials: 'same-origin',
     headers: { ...(form ? {} : { 'Content-Type': 'application/json' }), ...(method !== 'GET' ? { 'X-CSRFToken': csrf } : {}) },
     body: method === 'GET' || body === undefined ? undefined : form || JSON.stringify(body) });
-  const j = await r.json().catch(() => ({}));
+  const j = r.early ? r.j : await r.json().catch(() => ({}));
   if (j && j.csrf_token) csrf = j.csrf_token;
   if (r.status === 401 && j.error === 'Sign in first.') { forgetRead(); await pgp.forgetAll().catch(() => {}); try { dispatchEvent(new CustomEvent('foldoy-signed-out')); } catch (_) {  } }
   if (!r.ok) throw new ApiError(j.error || 'Something went wrong. Try again.', r.status, j);
@@ -177,6 +180,7 @@ async function freshAliasKeys(s) {
 }
 
 let REC = null;
+let OPENED = null;
 const ppOn = s => !!s?.privacy_plus?.on;
 async function recOf(s) {
   REC = null;
@@ -220,6 +224,7 @@ export const account = {
     return r;
   },
   async makeRecoveryCode(password, s, code) {
+    if (OPENED) await OPENED;
     const auth = await pgp.authFor(password, s.kdf);
     const rc = pgp.newRecoveryCode(); const { recovery, copies } = await pgp.makeRecovery(rc);
     const { kdf, rauth, public_key, wrapped_key, iv } = recovery;
@@ -260,6 +265,13 @@ export const account = {
     if (LIVE || ppOn(s)) return false;
     try { const { wrap } = await pgp.derive(DEMO_PASSWORD, s.kdf); await pgp.unlockAll(wrap, s.keys); pgp.setIds(s.keys); await pgp.remember(s.address); await recOf(s); return true; } catch { return false; }
   },
+  async bootFast(s) {
+    if (!LIVE || !s.e2e || !s.keys || s.key?.own) return (await account.boot(s)) ? { ready: Promise.resolve(true) } : null;
+    const r = await pgp.restoreWrap(s.address, s.keys);
+    if (!r) return null;
+    const ready = OPENED = r.ready.then(async ok => { if (ok) await recOf(s); return ok; });
+    return { ready };
+  },
   async logout(address) { await api.logout().catch(() => {}); await pgp.forget(address); },
   auth: (password, s) => pgp.authFor(password, s.kdf),
   async reset(email, code, password, two_factor_code, privacyPlus, address) {
@@ -281,12 +293,14 @@ export const account = {
     await pgp.remember(s.address); return s;
   },
   async ppTurnOn(password, pkey, s, code) {
+    if (OPENED) await OPENED;
     const auth = await pgp.authFor(password, s.kdf);
     const k = await pgp.ppWrapAll(pkey);
     const r = await api.ppOn({ auth, code, pauth: k.pauth, kdf: k.kdf, keys: k.keys.filter(x => x.id) });
     await pgp.remember(s.address); REC = null; return r;
   },
   async ppTurnOff(password, pkey, s, code) {
+    if (OPENED) await OPENED;
     const k = await pgp.ppUnwrapAll(pkey, s.privacy_plus.kdf, password, s.kdf);
     let pub = s.recovery?.set ? s.recovery.public_key : null;
     if (pub) { const fp = await pgp.fingerprint(pub).catch(() => null), pinned = await pgp.pinGet(s.address, 'recovery'); if (!(pinned ? pinned === fp : await pgp.recoveryCertified(pub))) pub = null; }
@@ -300,12 +314,13 @@ export const account = {
   },
   ppBackup: (s, pkey) => pgp.ppBackup(s.address, pkey),
   async keyHere(password, s, code) {
+    if (OPENED) await OPENED;
     const k = await pgp.newMainKey(s.address, password, s.kdf);
     const rcopy = (await recOf(s)) ? await pgp.copyForAddress(null, REC) : null;
     const r = await api.setKey({ auth: k.auth, code, key: { ...k.key, ...(rcopy ? { rcopy } : {}) } }); await pgp.remember(s.address); return r;
   },
-  async createAlias(body) { const domain = body.domain; const name = body.name || ''; return api.createAlias({ ...body, key: await pgp.newWrappedKey(name ? `${name}@${domain}` : `alias@${domain}`, REC) }); },
-  async createAddress(name, domain, primary = false) { return api.createAddress({ name, domain, ...(primary ? { primary: true } : {}), key: await pgp.newWrappedKey(`${name}@${domain}`, REC) }); },
+  async createAlias(body) { if (OPENED) await OPENED; const domain = body.domain; const name = body.name || ''; return api.createAlias({ ...body, key: await pgp.newWrappedKey(name ? `${name}@${domain}` : `alias@${domain}`, REC) }); },
+  async createAddress(name, domain, primary = false) { if (OPENED) await OPENED; return api.createAddress({ name, domain, ...(primary ? { primary: true } : {}), key: await pgp.newWrappedKey(`${name}@${domain}`, REC) }); },
 };
 
 const bodyMem = new Map();

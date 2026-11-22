@@ -1,6 +1,8 @@
 
 let lib = null;
 const load = async () => (lib ||= await import('./vendor/openpgp.min.js'));
+const loadAgain = async () => (lib ||= await import(`${document.querySelector('link[rel="modulepreload"][href*="openpgp"]')?.href
+  || new URL('./vendor/openpgp.min.js', import.meta.url).href}?again=1`));
 export const b64 = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000)); return btoa(s); };
 export const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 const enc = s => new TextEncoder().encode(s);
@@ -10,6 +12,7 @@ let ring = [];
 let wrapKey = null;
 let extra = [];
 const acct = () => ring.find(k => !k.alias)?.priv || null;
+let opening = null, epoch = 0;
 
 let argonP = null;
 const argon = () => (argonP ||= globalThis.hashwasm ? Promise.resolve(globalThis.hashwasm) : new Promise((res, rej) => {
@@ -51,6 +54,7 @@ export async function newAccountKey(address, password) {
   return { auth, kdf, key: { public_key: publicKey.armor(), ...(await seal(wrap, privateKey.write())) }, fingerprint: fmt(publicKey.getFingerprint()) };
 }
 export async function newWrappedKey(address, recPub) {
+  if (opening) await opening;
   if (!wrapKey) throw new Error('Your key is not loaded on this device.');
   const { privateKey, publicKey } = await gen(address);
   ring.push({ id: null, alias: address, priv: privateKey });
@@ -60,7 +64,7 @@ async function sameKey(o, priv, public_key) {
   if (!public_key) return true;
   try { return priv.getFingerprint() === (await o.readKey({ armoredKey: public_key })).getFingerprint(); } catch { return false; }
 }
-export async function unlockAll(wrap, keys) {
+async function openKeys(wrap, keys) {
   const o = await load();
   const out = [];
   for (const k of keys || []) {
@@ -68,10 +72,15 @@ export async function unlockAll(wrap, keys) {
     try { const priv = await o.readPrivateKey({ binaryKey: await open(wrap, k) }); if (await sameKey(o, priv, k.public_key)) out.push({ id: k.id, alias: k.alias || null, priv }); } catch {}
   }
   if (!out.some(k => !k.alias) && (keys || []).some(k => !k.alias && k.kind !== 'own' && !k.stale)) throw new Error('wrong');
+  return out;
+}
+export async function unlockAll(wrap, keys) {
+  const out = await openKeys(wrap, keys);
   ring = out; wrapKey = wrap;
   return true;
 }
 export async function rewrapAll(password) {
+  if (opening) await opening;
   if (!ring.length) throw new Error('Your key is not loaded on this device.');
   const kdf = newKdf(); const { auth, wrap } = await derive(password, kdf);
   const keys = [];
@@ -81,12 +90,14 @@ export async function rewrapAll(password) {
 }
 export const hasKey = () => ring.length > 0 || extra.length > 0;
 export async function newMainKey(address, password, kdf) {
+  if (opening) await opening;
   const { auth, wrap } = await derive(password, kdf);
   const { privateKey, publicKey } = await gen(address);
   ring = [{ id: null, alias: null, priv: privateKey }, ...ring.filter(k => k.alias)]; wrapKey = wrap;
   return { auth, key: { public_key: publicKey.armor(), ...(await seal(wrap, privateKey.write())) } };
 }
 export async function contactId(address) {
+  if (opening) await opening;
   const me = acct(); if (!me) throw new Error('nokey');
   const bytes = new Uint8Array([...me.write(), 0, ...enc(String(address).toLowerCase())]);
   return b64(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -105,9 +116,27 @@ export async function remember(address) { if (wrapKey) await tx('readwrite', s =
 export async function restore(address, keys) {
   try { const w = await tx('readonly', s => s.get(address)); if (!w) return false; await unlockAll(w, keys); return true; } catch { return false; }
 }
+export async function restoreWrap(address, keys) {
+  let w; try { w = await tx('readonly', s => s.get(address)); } catch { return false; }
+  if (!w) return false;
+  const main = (keys || []).filter(k => !k.alias && k.kind !== 'own' && !k.stale);
+  if (main.length) {
+    let ok = false;
+    for (const k of main) { if (!k.wrapped_key) continue; try { const b = await open(w, k); if (b instanceof Uint8Array) b.fill(0); ok = true; break; } catch {} }
+    if (!ok) return false;
+  }
+  wrapKey = w;
+  const e = epoch;
+  const once = () => openKeys(w, keys).then(out => { if (e !== epoch) return null; ring = out; setIds(keys); return true; },
+    x => (e !== epoch ? null : x?.message === 'wrong' ? false : 'load'));
+  const p = opening = once()
+    .then(r => (r === 'load' ? new Promise(res => setTimeout(res, 1500)).then(() => (e === epoch ? loadAgain().catch(() => {}).then(once) : null)) : r))
+    .then(r => { if (opening === p) opening = null; return r; });
+  return { ready: p };
+}
 const soon = (p, ms) => Promise.race([Promise.resolve(p).catch(() => {}), new Promise(r => setTimeout(r, ms))]);
-export async function forget(address) { ring = []; wrapKey = null; extra = []; rowMem.clear(); await soon(tx('readwrite', s => s.delete(address)), 3000); await soon(txIn('cache', 'readwrite', s => s.clear()), 3000); await soon(dropSearch(address), 1500); }
-export async function forgetAll() { ring = []; wrapKey = null; extra = []; rowMem.clear(); await soon(tx('readwrite', s => s.clear()), 3000); await soon(txIn('cache', 'readwrite', s => s.clear()), 3000); await soon(dropSearch(null), 1500); }
+export async function forget(address) { epoch++; opening = null; ring = []; wrapKey = null; extra = []; rowMem.clear(); await soon(tx('readwrite', s => s.delete(address)), 3000); await soon(txIn('cache', 'readwrite', s => s.clear()), 3000); await soon(dropSearch(address), 1500); }
+export async function forgetAll() { epoch++; opening = null; ring = []; wrapKey = null; extra = []; rowMem.clear(); await soon(tx('readwrite', s => s.clear()), 3000); await soon(txIn('cache', 'readwrite', s => s.clear()), 3000); await soon(dropSearch(null), 1500); }
 export const deviceKey = () => wrapKey;
 async function dropSearch(address) {
   const del = name => new Promise(res => { try { const r = indexedDB.deleteDatabase(name); r.onsuccess = r.onerror = r.onblocked = () => res(); } catch { res(); } });
@@ -166,6 +195,7 @@ export async function keptPut(address, id, words, files, armoredKey) {
 }
 export async function keptList() { return (await keptTx('kept', 'readonly', t => t.objectStore('kept').getAll())) || []; }
 export async function keptOpen(rec) {
+  if (opening) await opening;
   const o = await load(), keys = [...ring.map(k => k.priv), ...extra];
   if (!keys.length) throw new Error('nokey');
   const words = JSON.parse((await o.decrypt({ message: await o.readMessage({ armoredMessage: rec.sealed }), decryptionKeys: keys })).data), files = {};
@@ -179,6 +209,7 @@ export async function keptOpen(rec) {
 export async function keptDrop(address, id) { const k = `${address}|${id}`; await keptTx(['kept', 'files'], 'readwrite', t => { t.objectStore('files').delete(filesOf(k)); return t.objectStore('kept').delete(k); }); }
 
 export async function decrypt(armored, signerKey) {
+  if (opening) await opening;
   const o = await load();
   const keys = [...ring.map(k => k.priv), ...extra];
   if (!keys.length) throw new Error('nokey');
@@ -192,6 +223,7 @@ export async function decrypt(armored, signerKey) {
 }
 
 export async function encryptMail({ subject, text, html, files = [] }, publicKeys, from, { hide = false, bcc = [] } = {}) {
+  if (opening) await opening;
   const o = await load();
   const keys = await Promise.all([...new Set(publicKeys)].map(k => o.readKey({ armoredKey: k })));
   const self = (from && ring.find(k => k.alias === from)?.priv) || acct();
@@ -324,12 +356,13 @@ export async function checkKey(public_key, address) {
   return { fingerprint: fmt(k.getFingerprint()), matches: ids.includes(String(address).toLowerCase()) };
 }
 export async function verifyOwn(armored) {
+  if (opening) await opening;
   const o = await load(); const me = acct(); if (!me) return null;
   const { data, signatures } = await o.decrypt({ message: await o.readMessage({ armoredMessage: armored }), decryptionKeys: [me], verificationKeys: [me.toPublic()] });
   try { if (!signatures.length || (await signatures[0].verified) !== true) return null; } catch { return null; }
   return mime(data);
 }
-export async function myFingerprint() { const k = acct(); return k ? fmt(k.getFingerprint()) : null; }
+export async function myFingerprint() { if (opening) await opening; const k = acct(); return k ? fmt(k.getFingerprint()) : null; }
 
 export async function readPublic(text) {
   const o = await load();
@@ -351,6 +384,7 @@ export async function loadForTab(text, passphrase) {
 }
 
 export async function keyFile(address) {
+  if (opening) await opening;
   if (!ring.length) throw new Error('Your key is not loaded on this device.');
   const o = await load();
   const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', r = crypto.getRandomValues(new Uint8Array(24));
@@ -370,6 +404,7 @@ export async function armorKeys(privs, passphrase) {
   return o.armor(o.enums.armor.privateKey, bytes, undefined, undefined, undefined, true);
 }
 export async function appKeyFile() {
+  if (opening) await opening;
   if (!ring.length) throw new Error('Your key is not loaded on this device.');
   const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', r = crypto.getRandomValues(new Uint8Array(24));
   const code = Array.from(r, x => A[x % 32]).join('').replace(/(.{4})(?!$)/g, '$1-');
@@ -407,6 +442,7 @@ async function copyOf(priv, recPub) {
   return o.encrypt({ message: await o.createMessage({ binary: priv.write() }), encryptionKeys: await o.readKey({ armoredKey: recPub }), format: 'armored' });
 }
 export async function makeRecovery(code) {
+  if (opening) await opening;
   const kdf = newKdf(); const { rauth, rwrap } = await deriveRecovery(code, kdf);
   const { privateKey, publicKey: bare } = await gen('');
   const me = acct(); const publicKey = me ? await bare.signPrimaryUser([me]) : bare;
@@ -417,6 +453,7 @@ export async function makeRecovery(code) {
   return { recovery, copies };
 }
 export async function recoveryCertified(recPub) {
+  if (opening) await opening;
   const o = await load(); const me = acct(); if (!me || !recPub) return false;
   try { return (await (await o.readKey({ armoredKey: recPub })).verifyPrimaryUser([me.toPublic()])).some(x => x.valid === true); } catch { return false; }
 }
@@ -429,11 +466,12 @@ async function checkCopies(pair, copies) {
   }
 }
 export async function copiesFor(recPub, which = () => true) {
+  if (opening) await opening;
   const out = [];
   for (const k of ring) if (which(k)) out.push({ id: k.id, alias: k.alias, rcopy: await copyOf(k.priv, recPub) });
   return out;
 }
-export async function copyForAddress(address, recPub) { const k = ring.find(x => x.alias === address); return k ? copyOf(k.priv, recPub) : null; }
+export async function copyForAddress(address, recPub) { if (opening) await opening; const k = ring.find(x => x.alias === address); return k ? copyOf(k.priv, recPub) : null; }
 export async function openCopies(code, kdf, sealed, keys) {
   const o = await load();
   const { rwrap } = await deriveRecovery(code, kdf);
@@ -450,6 +488,7 @@ export async function openCopies(code, kdf, sealed, keys) {
   return out;
 }
 export async function wrapOpened(opened, password) {
+  if (opening) await opening;
   const kdf = newKdf(); const { auth, wrap } = await derive(password, kdf);
   const keys = [];
   for (const k of opened) keys.push({ id: k.id, ...(await seal(wrap, k.priv.write())) });
@@ -457,6 +496,7 @@ export async function wrapOpened(opened, password) {
   return { auth, kdf, keys };
 }
 export async function rewrapOpened(opened) {
+  if (opening) await opening;
   if (!wrapKey) throw new Error('Your key is not loaded on this device.');
   const keys = [];
   for (const k of opened) keys.push({ id: k.id, ...(await seal(wrapKey, k.priv.write())) });
@@ -474,6 +514,7 @@ async function derivePP(pkey, kdf) {
 }
 export const ppAuth = async (pkey, kdf) => (await derivePP(pkey, kdf)).pauth;
 export async function ppWrapAll(pkey) {
+  if (opening) await opening;
   if (!ring.length) throw new Error('Your key is not loaded on this device.');
   const kdf = newKdf(); const { pauth, pwrap } = await derivePP(pkey, kdf);
   const keys = [];
@@ -482,6 +523,7 @@ export async function ppWrapAll(pkey) {
   return { pauth, kdf, keys };
 }
 export async function ppUnwrapAll(pkey, ppKdf, password, kdf) {
+  if (opening) await opening;
   if (!ring.length) throw new Error('Your key is not loaded on this device.');
   const { pauth } = await derivePP(pkey, ppKdf); const { auth, wrap } = await derive(password, kdf);
   const keys = [];
@@ -494,6 +536,7 @@ export async function ppUnlock(pkey, ppKdf, keys) {
   return unlockAll(pwrap, keys);
 }
 export async function ppBackup(address, pkey) {
+  if (opening) await opening;
   if (!ring.length) throw new Error('Your key is not loaded on this device.');
   const o = await load();
   const blocks = [];

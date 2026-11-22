@@ -6,7 +6,8 @@
 <meta name="foldoy-free-domains" content="{{ free_mail_domains|join:',' }}">
 <meta name="foldoy-frame-css" content="{% static 'mail/inbox/mailframe.css' %}">
 <meta name="foldoy-search-worker" content="{% static 'mail/shared/search-worker.js' %}">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
+{% if fast_boot %}<meta name="foldoy-fast-boot" content="1">
+{% endif %}<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
 <title>Inbox · foldoy</title>
 <meta name="theme-color" content="#000000">
 {% include "mail/_app_head.html" %}
@@ -25,7 +26,9 @@
 <link rel="modulepreload" href="{% static 'mail/shared/sample-data.js' %}">
 <link rel="modulepreload" href="{% static 'mail/shared/vendor/purify-3.4.18.es.js' %}">
 <link rel="modulepreload" href="{% static 'mail/shared/vendor/openpgp.min.js' %}">
-</head>
+{% if fast_boot %}<link rel="modulepreload" href="{% static 'mail/shared/search-index.js' %}">
+<link rel="modulepreload" href="{% static 'mail/shared/search-core.js' %}">
+{% endif %}</head>
 <body>
 <a class="skip pill light sm" href="#list">Skip to messages</a>
 <div class="app" id="app" data-view="mail" data-depth="list">

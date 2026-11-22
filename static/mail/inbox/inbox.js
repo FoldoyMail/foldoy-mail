@@ -158,12 +158,27 @@ async function boot() {
   paintAccent(S.me.accent); paintTheme(S.me.theme);
   if (!S.me.e2e && (S.me.mailbox === 'none' || S.me.waiting_for === 'key' || !S.me.address)) return claimPane();
   if (S.me.sending?.hold) return lockedPane();
+  if (FAST_BOOT) return fastBoot();
   if (!(await account.boot(S.me))) { if (S.me.privacy_plus?.on) return ppUnlockPane(); await api.logout().catch(() => {}); location.href = '/login/'; return; }
+  await start();
+}
+const FAST_BOOT = !!document.querySelector('meta[name="foldoy-fast-boot"]');
+async function fastBoot() {
+  const b = await account.bootFast(S.me);
+  if (!b) { if (S.me.privacy_plus?.on) return ppUnlockPane(); await api.logout().catch(() => {}); location.href = '/login/'; return; }
+  S.ring = b.ready.then(async ok => {
+    if (S.leaving) return ok;
+    if (ok === 'load') { api.oops('load-failed'); toast('Your mail could not be opened.', { label: 'Reload', run: () => location.reload() }, 600000); return ok; }
+    if (ok !== false) return ok;
+    if (S.me.privacy_plus?.on) { await pgp.forget(S.me.address); location.reload(); return ok; }
+    await api.logout().catch(() => {}); location.href = '/login/'; return ok;
+  });
   await start();
 }
 async function start() {
   await refreshRail();
-  idx.start(S.me).catch(() => {});
+  if (S.ring) S.ring.then(ok => { if (ok === true) idx.start(S.me).catch(() => {}); });
+  else idx.start(S.me).catch(() => {});
   setInterval(() => { if (!document.hidden) checkNew(); }, 30e3);
   setInterval(() => { if (document.hidden) checkNew(); }, 60e3);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) checkNew(); });
@@ -1129,11 +1144,19 @@ async function repage() {
     if (S.key === key && S.folder === folder && !S.q && !S.picked.size) { S.raw = r.items; S.items = groupThreads(S.raw); S.next = r.next; renderList(); markCurrent(S.sel); }
   } catch {}
 }
+function rowRead(id) {
+  const r = list.querySelector(`.row[data-id="${id}"]`); if (!r) return;
+  const m = S.items.find(x => x.id === id), h = r.querySelector('.hacts');
+  if (!m) { r.classList.remove('unread'); return; }
+  const more = [...r.classList].filter(c => !['row', 'unread', 'picked'].includes(c));
+  r.className = `row ${m.unread ? 'unread' : ''} ${S.picked.has(m.id) ? 'picked' : ''}${more.length ? ` ${more.join(' ')}` : ''}`;
+  if (h) h.outerHTML = rowActs(m);
+}
 function markSeen(id, folder) {
   const it = S.items.find(x => x.id === id), was = it ? it.unread : true;
   const n = it ? new Set([it, ...(it.members || [])].filter(x => x.unread).map(x => x.id)).size : 1;
   if (it) { it.unread = false; it.members?.forEach(x => { x.unread = false; }); }
-  list.querySelector(`.row[data-id="${id}"]`)?.classList.remove('unread');
+  rowRead(id);
   inOrder(id, () => api.update(id, { unread: false })).catch(() => {});
   railSoon(folder, was ? -Math.max(1, n) : 0);
 }
@@ -1151,6 +1174,7 @@ async function openMessage(id) {
   reading.catch(() => {});
   if (!phone() && !splitPane() && !$('.reader', pane)) app.dataset.depth = 'list';
   if (splitPane() && stub && !shown) { markCurrent(id); $('.reader', pane)?.classList.add('leaving'); }
+  if (S.ring) await S.ring;
   const fast = !stub || shown ? true : await Promise.race([reading.then(() => true, () => true), new Promise(r => setTimeout(() => r(false), splitPane() ? 300 : 150))]);
   if (S.sel !== id) return;
   if (stub) {
@@ -1195,7 +1219,7 @@ async function openMessage(id) {
     m.keyNow = await Promise.race([mail.senderKey(m.from.addr).catch(() => null), new Promise(r => setTimeout(() => r(undefined), 200))]);
     if (S.sel !== id) return;
   }
-  if (row?.group?.length > 1 && row.unread && !m.unread) { row.unread = false; list.querySelector(`.row[data-id="${id}"]`)?.classList.remove('unread'); railSoon(); }
+  if (row?.group?.length > 1 && row.unread && !m.unread) { row.unread = false; rowRead(id); railSoon(); }
   const holds = !!m.html && !phone() && !splitPane() && app.dataset.depth !== 'pane';
   if ((m.unread || stub?.unread) && holds) { (S.seenLater ||= []).push([id, m.folder]); m.unread = false; }
   else if (m.unread || stub?.unread) { markSeen(id, m.folder); m.unread = false; if (stub) stub.unread = false; }
@@ -1325,6 +1349,8 @@ function renderReader(m) {
         <button class="pill ${phone() ? 'soft' : 'ghost'} md" type="button" data-act="forward">${icon('forward')}Forward</button>`}
       </div>
     </article>`;
+  const still = again && pane.querySelector(':scope > .reader.still');
+  if (still && still.getAnimations) { still.classList.remove('still'); still.getAnimations().forEach(a => a.finish()); }
   pane.scrollTop = top;
   S.open = m;
   thumbs(m);
