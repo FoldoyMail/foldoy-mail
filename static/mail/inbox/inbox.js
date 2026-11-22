@@ -150,6 +150,16 @@ const installRedraw = () => { if (S.sd && /^#\/settings\/install/.test(location.
 addEventListener('beforeinstallprompt', e => { e.preventDefault(); installAsk = e; installRedraw(); });
 addEventListener('appinstalled', () => { installAsk = null; installRedraw(); });
 
+let submitN = 0;
+function onSubmit(el, fn) {
+  const flag = `busy${++submitN}`;
+  el.addEventListener('submit', async e => {
+    const form = (e.target && e.target.closest && e.target.closest('form')) || el;
+    if (form.dataset && form.dataset[flag]) { e.preventDefault(); return; }
+    if (form.dataset) form.dataset[flag] = '1';
+    try { await fn(e); } finally { if (form.dataset) delete form.dataset[flag]; }
+  });
+}
 async function boot() {
   const first = !location.hash || /^#\/f\/inbox\/?$/.test(location.hash);
   S.pre = { folders: api.folders().catch(() => null), list: first ? api.messages({ folder: 'inbox' }).catch(() => null) : null };
@@ -285,7 +295,7 @@ function ppUnlockPane() {
   </form></div>`;
   $('#ppukey').focus();
   $('[data-act="showppu"]').onclick = e => { const i = $('#ppukey'); i.type = i.type === 'password' ? 'text' : 'password'; e.target.textContent = i.type === 'password' ? 'Show' : 'Hide'; };
-  $('#ppuf').addEventListener('submit', async e => {
+  onSubmit($('#ppuf'), async e => {
     e.preventDefault(); const b = $('#ppugo'), er = $('#ppuerr'); er.textContent = '';
     if (!$('#ppukey').value) { er.textContent = 'Type your privacy+ key.'; return; }
     b.setAttribute('aria-busy', 'true'); b.textContent = 'Unlocking…';
@@ -312,7 +322,7 @@ function claimPane() {
     if (!v.name) return; const r = await api.check(v.name, v.domain).catch(e => ({ ok: false, message: e.message })); ok = r.ok;
     const say = $('#claimsay'); say.className = 'say ' + (r.ok ? 'ok' : 'bad'); say.textContent = r.ok ? `${v.name}@${v.domain} is available.` : r.message; }, 220); } });
   pk.focus();
-  $('#claimf').addEventListener('submit', async e => {
+  onSubmit($('#claimf'), async e => {
     e.preventDefault(); const v = pk.get();
     if (!v.name || !ok) { $('#claimerr').textContent = 'Pick a free address first.'; return; }
     const next = $('#claimnew').value, bad = account.passwordProblem(next);
@@ -1710,7 +1720,7 @@ function loadKeyPane(m) {
         <div class="acts"><button class="pill light" type="submit" id="ppgo">Load for this tab</button></div>
       </form>
     </div>`;
-  $('#unlockf').addEventListener('submit', async e => {
+  onSubmit($('#unlockf'), async e => {
     e.preventDefault();
     const b = $('#ppgo'); b.setAttribute('aria-busy', 'true'); $('#ppsay').textContent = '';
     try {
@@ -2837,7 +2847,7 @@ function newAlias() {
     </form>`;
   const pk = picker($('#napick'), { domains: doms, domain: doms[0].d, placeholder: 'random', label: 'Alias name' });
   ($('#napick input') || $('#ah')).focus({ preventScroll: true });
-  $('#naf').addEventListener('submit', async e => {
+  onSubmit($('#naf'), async e => {
     e.preventDefault();
     const v = pk.get();
     try { const a = await account.createAlias({ name: v.name, domain: v.domain, note: $('#nanote').value }); S.me = await api.session(); copy(a.address, 'Alias made and copied.'); location.hash = `#/aliases/${a.id}`; }
@@ -3481,13 +3491,13 @@ function drawSettings(sec) {
       ${body[cur]()}
     </div>`;
   const nff = $('#nff');
-  if (nff) nff.addEventListener('submit', async e => {
+  if (nff) onSubmit(nff, async e => {
     e.preventDefault(); const v = $('#nfname').value.trim(); if (!v) return;
     try { await api.makeFolder(v); await railQuiet(); toast(`Folder ${v} made`); } catch (x) { toast(x.message); }
     showSettings();
   });
   const frf = $('#frenf');
-  if (frf) { $('#frenin').focus(); frf.addEventListener('submit', async e => {
+  if (frf) { $('#frenin').focus(); onSubmit(frf, async e => {
     e.preventDefault();
     const v = $('#frenin').value.trim();
     if (!v) { toast('Give the folder a name.'); $('#frenin').focus(); return; }
@@ -3495,7 +3505,7 @@ function drawSettings(sec) {
     showSettings();
   }); }
   const rlf = $('#rulef');
-  if (rlf) rlf.addEventListener('submit', async e => {
+  if (rlf) onSubmit(rlf, async e => {
     e.preventDefault(); const [action, folder] = $('#raction').value.split(':');
     const v = $('#rvalue').value.trim().toLowerCase(), ok = okAddr(v) || /^[^@\s<>()]+@$/.test(v) || /^@?[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(v);
     if (!ok) { $('#rerr').textContent = v ? 'Write an address, or @ and a domain, like @example.com.' : 'Write the address the rule looks for.'; $('#rvalue').setAttribute('aria-invalid', 'true'); $('#rvalue').focus(); return; }
@@ -3506,7 +3516,7 @@ function drawSettings(sec) {
   const arf = $('#arf');
   if (arf) {
     $('#aron').onclick = () => $('#aron').setAttribute('aria-checked', String($('#aron').getAttribute('aria-checked') !== 'true'));
-    arf.addEventListener('submit', async e => {
+    onSubmit(arf, async e => {
       e.preventDefault();
       const day = (id, end) => { const v = $(id).value; return v ? new Date(`${v}T${end ? '23:59' : '00:00'}`).toISOString() : null; };
       const on = $('#aron').getAttribute('aria-checked') === 'true', a = day('#arfrom'), b = day('#arto', true);
@@ -3519,7 +3529,7 @@ function drawSettings(sec) {
     });
   }
   const expf = $('#expf');
-  if (expf) expf.addEventListener('submit', async e => {
+  if (expf) onSubmit(expf, async e => {
     e.preventDefault();
     const er = $('#experr'), b = $('button[type=submit]', expf);
     er.textContent = '';
@@ -3531,7 +3541,7 @@ function drawSettings(sec) {
     } catch (x) { er.textContent = x.message; b.removeAttribute('aria-busy'); b.textContent = 'Start export'; }
   });
   const impf = $('#impf');
-  if (impf) impf.addEventListener('submit', async e => {
+  if (impf) onSubmit(impf, async e => {
     e.preventDefault();
     const er = $('#imperr'), b = $('button[type=submit]', impf), u = $('#impu').value.trim(), pw = $('#impp').value;
     er.textContent = '';
@@ -3553,14 +3563,14 @@ function drawSettings(sec) {
     S.focusSec = 'h-sw'; drawSettings('switch'); $(`.swl input[data-sw="${c.dataset.sw}"]`)?.focus();
   }));
   const sf = $('#sigf');
-  if (sf) sf.addEventListener('submit', async e => {
+  if (sf) onSubmit(sf, async e => {
     e.preventDefault();
     try { S.me = await api.preferences({ signature: $('#sigin').value }); $('#sigsay').textContent = 'Saved'; } catch (x) { $('#sigsay').textContent = x.message; }
   });
   const rf = $('#recf');
   if (rf) {
     ($('#recin') || $('#reccode') || $('#recpw')).focus();
-    rf.addEventListener('submit', async e => {
+    onSubmit(rf, async e => {
       e.preventDefault();
       try {
         if (setMode === 'rec') { await api.setRecovery($('#recin').value.trim(), await au('recpw'), tfa()); setMode = 'rec-code'; return showSettings(); }
@@ -3573,7 +3583,7 @@ function drawSettings(sec) {
   const pf = $('#ppf');
   if (pf) {
     $('#ppk1').focus();
-    pf.addEventListener('submit', async e => {
+    onSubmit(pf, async e => {
       e.preventDefault();
       const err = $('#pperr'), b = $('button[type=submit]', pf), on = setMode === 'pp-on'; err.textContent = '';
       const k = $('#ppk1').value;
@@ -3595,7 +3605,7 @@ function drawSettings(sec) {
   const ppbf = $('#ppbf');
   if (ppbf) {
     $('#ppbk').focus();
-    ppbf.addEventListener('submit', async e => {
+    onSubmit(ppbf, async e => {
       e.preventDefault(); const er = $('#ppberr'), k = $('#ppbk').value; er.textContent = '';
       if (!k) { er.textContent = 'Type your privacy+ key.'; return; }
       try { await account.ppUnlock(k, S.me); pgp.download(await account.ppBackup(S.me, k), 'foldoy-privacy-plus-backup.asc'); $('#ppbk').value = ''; setMode = null; showSettings(); }
@@ -3606,7 +3616,7 @@ function drawSettings(sec) {
   if (ppx) {
     ($('#pkey') || $('#ppw')).focus();
     $('#pkfile')?.addEventListener('change', async e => { const f = e.target.files[0]; if (f) $('#pkey').value = await f.text(); });
-    ppx.addEventListener('submit', async e => {
+    onSubmit(ppx, async e => {
       e.preventDefault();
       const err = $('#pperr'), btn = $('button[type=submit]', ppx); err.textContent = '';
       try {
@@ -3627,7 +3637,7 @@ function drawSettings(sec) {
   const domf = $('#domf');
   if (domf) {
     $('#domin').focus();
-    domf.addEventListener('submit', async e => {
+    onSubmit(domf, async e => {
       e.preventDefault();
       const b = $('button[type=submit]', domf);
       b.setAttribute('aria-busy', 'true'); b.textContent = 'Adding…';
@@ -3643,7 +3653,7 @@ function drawSettings(sec) {
   if (addrf) {
     const ap = picker($('#addrpick'), { domains: ['veil.no', ...FREE_DOMAINS.filter(d => d !== 'veil.no')].map(d => ({ d, plan: '' })), domain: 'veil.no', placeholder: 'name', label: 'Address name' });
     ap.focus();
-    addrf.addEventListener('submit', async e => {
+    onSubmit(addrf, async e => {
       e.preventDefault(); const v = ap.get();
       if (!v.name) { $('#addrerr').textContent = 'Type the name you want.'; return; }
       try { const a = await account.createAddress(v.name, v.domain); S.me = await api.session(); toast(`${a.address} is yours.`); setMode = null; showSettings(); }
@@ -3654,7 +3664,7 @@ function drawSettings(sec) {
   if (claimf) {
     const cp = picker($('#claimpick'), { name: S.me.address.split('@')[0], domains: [{ d: 'foldoy.com', plan: '' }], domain: 'foldoy.com', placeholder: 'name', label: 'Address name' });
     cp.focus();
-    claimf.addEventListener('submit', async e => {
+    onSubmit(claimf, async e => {
       e.preventDefault(); const v = cp.get();
       if (!v.name) { $('#claimerr').textContent = 'Type the name you want.'; return; }
       try { const a = await account.createAddress(v.name, 'foldoy.com', true); S.me = await api.session(); toast(`${a.address} is yours.`); setMode = null; showSettings(); }
@@ -3664,7 +3674,7 @@ function drawSettings(sec) {
   const appf = $('#appf');
   if (appf) {
     $('#appl').focus();
-    appf.addEventListener('submit', async e => {
+    onSubmit(appf, async e => {
       e.preventDefault();
       const er = $('#apperr'), b = $('button[type=submit]', appf); er.textContent = '';
       if (!$('#appl').value.trim()) { er.textContent = 'Name it after the app or device, so you know which one to revoke.'; $('#appl').focus(); return; }
@@ -3680,7 +3690,7 @@ function drawSettings(sec) {
   const rcf = $('#rcf');
   if (rcf) {
     $('#rcpw').focus();
-    rcf.addEventListener('submit', async e => {
+    onSubmit(rcf, async e => {
       e.preventDefault(); const b = $('button[type=submit]', rcf); $('#rcerr').textContent = '';
       b.setAttribute('aria-busy', 'true'); b.textContent = 'Making the code…';
       try { freshRC = await account.makeRecoveryCode($('#rcpw').value, S.me, tfa()); setMode = null; showSettings(); }
@@ -3690,7 +3700,7 @@ function drawSettings(sec) {
   const ruf = $('#ruf');
   if (ruf) {
     $('#rcin').focus();
-    ruf.addEventListener('submit', async e => {
+    onSubmit(ruf, async e => {
       e.preventDefault(); const b = $('button[type=submit]', ruf); $('#ruerr').textContent = '';
       b.setAttribute('aria-busy', 'true'); b.textContent = 'Unlocking…';
       try { const n = await account.unlockOlder($('#rcin').value, S.me); toast(n ? 'Older mail opens again.' : 'There was nothing older to unlock.'); S.key = ''; setMode = null; showSettings(); }
@@ -3700,7 +3710,7 @@ function drawSettings(sec) {
   const tff = $('#tff');
   if (tff) {
     ($('#tfpw') || $('#tfc')).focus();
-    tff.addEventListener('submit', async e => {
+    onSubmit(tff, async e => {
       e.preventDefault();
       try {
         if (setMode === 'tf-on' && !tfSetup) { tfAuth = await au('tfpw'); tfSetup = await api.twoFactorSetup(tfAuth); return showSettings(); }
@@ -3714,7 +3724,7 @@ function drawSettings(sec) {
   const pwf = $('#pwf');
   if (pwf) {
     $('#pwc').focus();
-    pwf.addEventListener('submit', async e => {
+    onSubmit(pwf, async e => {
       e.preventDefault();
       const why = account.passwordProblem($('#pwn').value);
       if (why) { $('#pwerr').textContent = why; return; }
@@ -3728,7 +3738,7 @@ function drawSettings(sec) {
     const dlg = $('#deldlg'); dlg.showModal();
     dlg.addEventListener('cancel', e => { e.preventDefault(); setMode = null; S.focusSec = 'h-del'; showSettings(); });
     $('#delpw').focus();
-    delf.addEventListener('submit', async e => {
+    onSubmit(delf, async e => {
       e.preventDefault();
       try { await api.deleteAccount(await au('delpw'), tfa()); await pgp.forget(S.me.address); location.href = '/'; }
       catch (x) { $('#delerr').textContent = x.message; }
@@ -3751,7 +3761,7 @@ function drawSettings(sec) {
 function openRail() { app.classList.add('rail-open'); $('.scrim').hidden = false; $('#rail').querySelector('a[aria-current], a')?.focus(); }
 function closeRail() { if (!app.classList.contains('rail-open')) return; app.classList.remove('rail-open'); if (!phone()) $('.scrim').hidden = true; }
 
-document.addEventListener('submit', async e => {
+onSubmit(document, async e => {
   if (e.target.id !== 'dnamef') return;
   e.preventDefault();
   const i = $('#dname'), b = e.target.querySelector('button');
@@ -3964,7 +3974,7 @@ document.addEventListener('click', async e => {
     const box = $('#keynote .note.warn'); if (!box || $('#trustpw')) return;
     box.insertAdjacentHTML('beforeend', `<form class="trustf" id="trustf"><input id="trustpw" type="password" autocomplete="current-password" placeholder="Your login password" aria-label="Your login password"><button class="pill light sm" type="submit">Remember it</button></form>`);
     $('#trustpw').focus();
-    $('#trustf').addEventListener('submit', async ev => {
+    onSubmit($('#trustf'), async ev => {
       ev.preventDefault();
       try { await mail.acceptKey(S.open.from.addr, S.keyNow.fingerprint, await account.auth($('#trustpw').value, S.me)); $('#keynote').innerHTML = ''; toast('Key remembered'); }
       catch (x) { toast(x.message); }
