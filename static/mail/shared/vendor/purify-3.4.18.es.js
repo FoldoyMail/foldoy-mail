@@ -146,38 +146,18 @@ const regExpTest = function regExpTest(regExp, value) {
 	return apply(regExpTestRaw, regExp, [value]);
 };
 const typeErrorCreate = unconstruct(TypeError);
-/**
-* Creates a new function that calls the given function with a specified thisArg and arguments.
-*
-* @param func - The function to be wrapped and called.
-* @returns A new function that calls the given function with a specified thisArg and arguments.
-*/
 function unapply(func) {
 	return function(thisArg) {
 		for (var _len3 = arguments.length, args = new Array(_len3 > 1 ? _len3 - 1 : 0), _key3 = 1; _key3 < _len3; _key3++) args[_key3 - 1] = arguments[_key3];
 		return apply(func, thisArg, args);
 	};
 }
-/**
-* Creates a new function that constructs an instance of the given constructor function with the provided arguments.
-*
-* @param func - The constructor function to be wrapped and called.
-* @returns A new function that constructs an instance of the given constructor function with the provided arguments.
-*/
 function unconstruct(Func) {
 	return function() {
 		for (var _len4 = arguments.length, args = new Array(_len4), _key4 = 0; _key4 < _len4; _key4++) args[_key4] = arguments[_key4];
 		return construct(Func, args);
 	};
 }
-/**
-* Add properties to a lookup table
-*
-* @param set - The set to which elements will be added.
-* @param array - The array containing elements to be added to the set.
-* @param transformCaseFunc - An optional function to transform the case of each element before adding to the set.
-* @returns The modified set with added elements.
-*/
 function addToSet(set, array) {
 	let transformCaseFunc = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : stringToLowerCase;
 	if (setPrototypeOf) setPrototypeOf(set, null);
@@ -196,22 +176,10 @@ function addToSet(set, array) {
 	}
 	return set;
 }
-/**
-* Clean up an array to harden against CSPP
-*
-* @param array - The array to be cleaned.
-* @returns The cleaned version of the array
-*/
 function cleanArray(array) {
 	for (let index = 0; index < array.length; index++) if (!objectHasOwnProperty(array, index)) array[index] = null;
 	return array;
 }
-/**
-* Shallow clone an object
-*
-* @param object - The object to be cloned.
-* @returns A new object that copies the original.
-*/
 function clone(object) {
 	const newObject = create(null);
 	for (const _ref2 of entries(object)) {
@@ -226,12 +194,6 @@ function clone(object) {
 	}
 	return newObject;
 }
-/**
-* Copy a flat lookup table
-*
-* @param set - The set to copy.
-* @returns A new prototype-free set with the same entries.
-*/
 function cloneSet(set) {
 	const newSet = create(null);
 	const keys = objectKeys(set);
@@ -239,12 +201,6 @@ function cloneSet(set) {
 	while (l--) newSet[keys[l]] = set[keys[l]];
 	return newSet;
 }
-/**
-* Convert non-node values into strings without depending on direct property access.
-*
-* @param value - The value to stringify.
-* @returns A string representation of the provided value.
-*/
 function stringifyValue(value) {
 	switch (typeof value) {
 		case "string": return value;
@@ -267,13 +223,6 @@ function stringifyValue(value) {
 		default: return objectToString(value);
 	}
 }
-/**
-* This method automatically checks if the prop is function or getter and behaves accordingly.
-*
-* @param object - The object to look up the getter function in its prototype chain.
-* @param prop - The property name for which to find the getter function.
-* @returns The getter function found in the prototype chain or a fallback function.
-*/
 function lookupGetter(object, prop) {
 	while (object !== null) {
 		const desc = getOwnPropertyDescriptor(object, prop);
@@ -288,17 +237,6 @@ function lookupGetter(object, prop) {
 	}
 	return fallbackValue;
 }
-/**
-* Like lookupGetter, but for accessor properties only, and returns null
-* instead of a null-returning fallback when no getter exists on the chain.
-* Lets a caller fall back to a direct property read in environments that
-* lack the getter, where a fallback returning null would be indistinguishable
-* from a legitimate null value (e.g. namespaceURI of a no-namespace element).
-*
-* @param object - The object (usually a prototype) to start the lookup at.
-* @param prop - The accessor property name.
-* @returns The unapplied getter, or null if none was found.
-*/
 function lookupAccessor(object, prop) {
 	while (object !== null) {
 		const desc = getOwnPropertyDescriptor(object, prop);
@@ -998,14 +936,6 @@ const LITERAL_TEXT_ELEMENTS = freeze(addToSet({}, [
 const getGlobal = function getGlobal() {
 	return typeof window === "undefined" ? null : window;
 };
-/**
-* Creates a no-op policy for internal use only.
-* Don't export this function outside this module!
-* @param trustedTypes The policy factory.
-* @param purifyHostElement The Script element used to load DOMPurify (to determine policy name suffix).
-* @return The policy created (or null, if Trusted Types
-* are not supported or creating the policy failed).
-*/
 const _createTrustedTypesPolicy = function _createTrustedTypesPolicy(trustedTypes, purifyHostElement) {
 	if (typeof trustedTypes !== "object" || typeof trustedTypes.createPolicy !== "function") return null;
 	let suffix = null;
@@ -1039,26 +969,9 @@ const _createHooksMap = function _createHooksMap() {
 		uponSanitizeShadowNode: []
 	};
 };
-/**
-* Resolve a set-valued configuration option.
-*
-* @param cfg the cloned, prototype-free configuration object
-* @param key the configuration property to read
-* @param fallback the set to use when the option is absent or not an array
-* @param options case transform, and an optional base set to extend a copy of
-* @returns a fresh set built from cfg[key], or the fallback
-*/
 const _resolveSetOption = function _resolveSetOption(cfg, key, fallback, options) {
 	return objectHasOwnProperty(cfg, key) && arrayIsArray(cfg[key]) ? addToSet(options.base ? cloneSet(options.base) : {}, cfg[key], options.transform) : fallback;
 };
-/**
-* Resolve an object-valued configuration option.
-*
-* @param cfg the cloned, prototype-free configuration object
-* @param key the configuration property to read
-* @param fallback the read-only value to use when the option is absent
-* @returns a prototype-free clone of cfg[key], or the fallback
-*/
 const _resolveObjectOption = function _resolveObjectOption(cfg, key, fallback) {
 	const value = objectHasOwnProperty(cfg, key) ? cfg[key] : void 0;
 	return value && typeof value === "object" ? clone(value) : fallback;
@@ -1141,16 +1054,9 @@ function createDOMPurify() {
 	const _document = document, implementation = _document.implementation, createNodeIterator = _document.createNodeIterator, createDocumentFragment = _document.createDocumentFragment, getElementsByTagName = _document.getElementsByTagName;
 	const importNode = originalDocument.importNode;
 	let hooks = _createHooksMap();
-	/**
-	* Expose whether this browser supports running the full DOMPurify.
-	*/
 	DOMPurify.isSupported = typeof entries === "function" && typeof getParentNode === "function" && implementation && implementation.createHTMLDocument !== void 0;
 	const MUSTACHE_EXPR$1 = MUSTACHE_EXPR, ERB_EXPR$1 = ERB_EXPR, TMPLIT_EXPR$1 = TMPLIT_EXPR, DATA_ATTR$1 = DATA_ATTR, ARIA_ATTR$1 = ARIA_ATTR, IS_SCRIPT_OR_DATA$1 = IS_SCRIPT_OR_DATA, ATTR_WHITESPACE$1 = ATTR_WHITESPACE, CUSTOM_ELEMENT$1 = CUSTOM_ELEMENT;
 	let IS_ALLOWED_URI$1 = IS_ALLOWED_URI;
-	/**
-	* We consider the elements and attributes below to be safe. Ideally
-	* don't add any new ones but feel free to remove unwanted ones.
-	*/
 	let ALLOWED_TAGS = null;
 	const DEFAULT_ALLOWED_TAGS = addToSet({}, [
 		...html$1,
@@ -1297,11 +1203,6 @@ function createDOMPurify() {
 	const isRegexOrFunction = function isRegexOrFunction(testValue) {
 		return testValue instanceof RegExp || testValue instanceof Function;
 	};
-	/**
-	* _parseConfig
-	*
-	* @param cfg optional config literal
-	*/
 	const _parseConfig = function _parseConfig() {
 		let cfg = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : {};
 		if (!cfg || typeof cfg !== "object") cfg = {};
@@ -1430,51 +1331,21 @@ function createDOMPurify() {
 		...svgDisallowed
 	]);
 	const ALL_MATHML_TAGS = addToSet({}, [...mathMl$1, ...mathMlDisallowed]);
-	/**
-	* Namespace rules for an element in the SVG namespace.
-	*
-	* @param tagName the element's lowercase tag name
-	* @param parentNamespace the (possibly simulated) parent's namespace
-	* @param parentTagName the parent's lowercase tag name
-	* @returns true if a spec-compliant parser could produce this element
-	*/
 	const _checkSvgNamespace = function _checkSvgNamespace(tagName, parentNamespace, parentTagName) {
 		if (parentNamespace === HTML_NAMESPACE) return tagName === "svg";
 		if (parentNamespace === MATHML_NAMESPACE) return tagName === "svg" && (parentTagName === "annotation-xml" || MATHML_TEXT_INTEGRATION_POINTS[parentTagName]);
 		return Boolean(ALL_SVG_TAGS[tagName]);
 	};
-	/**
-	* Namespace rules for an element in the MathML namespace.
-	*
-	* @param tagName the element's lowercase tag name
-	* @param parentNamespace the (possibly simulated) parent's namespace
-	* @param parentTagName the parent's lowercase tag name
-	* @returns true if a spec-compliant parser could produce this element
-	*/
 	const _checkMathMlNamespace = function _checkMathMlNamespace(tagName, parentNamespace, parentTagName) {
 		if (parentNamespace === HTML_NAMESPACE) return tagName === "math";
 		if (parentNamespace === SVG_NAMESPACE) return tagName === "math" && HTML_INTEGRATION_POINTS[parentTagName];
 		return Boolean(ALL_MATHML_TAGS[tagName]);
 	};
-	/**
-	* Namespace rules for an element in the HTML namespace.
-	*
-	* @param tagName the element's lowercase tag name
-	* @param parentNamespace the (possibly simulated) parent's namespace
-	* @param parentTagName the parent's lowercase tag name
-	* @returns true if a spec-compliant parser could produce this element
-	*/
 	const _checkHtmlNamespace = function _checkHtmlNamespace(tagName, parentNamespace, parentTagName) {
 		if (parentNamespace === SVG_NAMESPACE && !HTML_INTEGRATION_POINTS[parentTagName]) return false;
 		if (parentNamespace === MATHML_NAMESPACE && !MATHML_TEXT_INTEGRATION_POINTS[parentTagName]) return false;
 		return !ALL_MATHML_TAGS[tagName] && (COMMON_SVG_AND_HTML_ELEMENTS[tagName] || !ALL_SVG_TAGS[tagName]);
 	};
-	/**
-	* @param element a DOM element whose namespace is being checked
-	* @returns Return false if the element has a
-	*  namespace that a spec-compliant parser would never
-	*  return. Return true otherwise.
-	*/
 	const _checkValidNamespace = function _checkValidNamespace(element) {
 		const elementNamespace = _readNamespaceURI(element);
 		const tagName = stringToLowerCase(_readNodeName(element));
@@ -1491,11 +1362,6 @@ function createDOMPurify() {
 		if (elementNamespace === HTML_NAMESPACE) return _checkHtmlNamespace(tagName, parentNamespace, parentTagName);
 		return PARSER_MEDIA_TYPE === "application/xhtml+xml";
 	};
-	/**
-	* _forceRemove
-	*
-	* @param node a DOM node
-	*/
 	const _forceRemove = function _forceRemove(node) {
 		arrayPush(DOMPurify.removed, { element: node });
 		try {
@@ -1505,16 +1371,6 @@ function createDOMPurify() {
 			if (!getParentNode(node)) throw typeErrorCreate("a node selected for removal could not be detached from its tree and cannot be safely returned; refusing to sanitize in place");
 		}
 	};
-	/**
-	* Removes an Attr node as that exact node, without book-keeping. Name-based
-	* removal lowercases the name in HTML documents and would miss a
-	* case-preserved one such as `ONERROR`, so it is only the fallback for
-	* clobbered or detached nodes.
-	*
-	* @param element the element to strip the attribute from
-	* @param attribute the Attr node to remove
-	* @param name the attribute's name, for the fallback path
-	*/
 	const _stripAttributeNode = function _stripAttributeNode(element, attribute, name) {
 		try {
 			removeAttributeNode(element, attribute);
@@ -1524,13 +1380,6 @@ function createDOMPurify() {
 			} catch (_) {}
 		}
 	};
-	/**
-	* Fail-closed teardown of an in-place root: strip every disallowed attribute
-	* in the subtree first, so nothing armed is left behind, then remove all
-	* children and the root's own attributes.
-	*
-	* @param root the in-place root to empty
-	*/
 	const _neutralizeRoot = function _neutralizeRoot(root) {
 		_neutralizeSubtree(root);
 		const childNodes = getChildNodes(root);
@@ -1541,15 +1390,6 @@ function createDOMPurify() {
 		});
 		if (_readNodeType(root) === NODE_TYPE.element) _stripAttributes(root, false);
 	};
-	/**
-	* Removes an attribute, preferably as its exact Attr node: name-based
-	* removal lowercases the name in HTML documents and misses case-preserved
-	* names, e.g. from imported XHTML.
-	*
-	* @param name an Attribute name
-	* @param element a DOM node
-	* @param attr the exact Attr node to remove, when the caller has it
-	*/
 	const _removeAttribute = function _removeAttribute(name, element, attr) {
 		if (!attr) try {
 			attr = element.getAttributeNode(name);
@@ -1573,13 +1413,6 @@ function createDOMPurify() {
 			} catch (_) {}
 		}
 	};
-	/**
-	* Removes an element's attributes without book-keeping. Used to neutralize
-	* nodes discarded from an in-place tree.
-	*
-	* @param element the element to strip
-	* @param keepAllowed whether attributes on the allowlist stay
-	*/
 	const _stripAttributes = function _stripAttributes(element, keepAllowed) {
 		const attributes = getAttributes(element);
 		if (!attributes) return;
@@ -1589,16 +1422,6 @@ function createDOMPurify() {
 			if (typeof name === "string" && !(keepAllowed && ALLOWED_ATTR[transformCaseFunc(name)])) _stripAttributeNode(element, attribute, name);
 		}
 	};
-	/**
-	* Iterative depth-first walk, so deep trees cannot overflow the call stack,
-	* reading through the cached getters, so clobbering cannot hide children.
-	* When `visit` returns false, the node's children are skipped. With
-	* `intoShadow`, open shadow roots are walked after their host's children.
-	*
-	* @param root where to start
-	* @param visit called for every node
-	* @param intoShadow whether to enter open shadow roots
-	*/
 	const _walkTree = function _walkTree(root, visit) {
 		let intoShadow = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : false;
 		const stack = [root];
@@ -1613,24 +1436,11 @@ function createDOMPurify() {
 			if (childNodes) for (let i = childNodes.length - 1; i >= 0; --i) stack.push(childNodes[i]);
 		}
 	};
-	/**
-	* Strips disallowed attributes from every element of a discarded subtree,
-	* so a handler that is already queued (a loading image) cannot fire.
-	*
-	* @param root the root of a removed subtree
-	*/
 	const _neutralizeSubtree = function _neutralizeSubtree(root) {
 		_walkTree(root, (node) => {
 			if (_readNodeType(node) === NODE_TYPE.element) _stripAttributes(node, true);
 		});
 	};
-	/**
-	* All nodes under `root`, root first, including open shadow roots. Template
-	* content is not entered, it is inert.
-	*
-	* @param root the in-place root
-	* @return the nodes
-	*/
 	const _collectLiveNodes = function _collectLiveNodes(root) {
 		const nodes = [];
 		_walkTree(root, (node) => {
@@ -1638,14 +1448,6 @@ function createDOMPurify() {
 		}, true);
 		return nodes;
 	};
-	/**
-	* Strips disallowed attributes from every element that was under the
-	* in-place root when the call started and no longer is, whatever removed
-	* or moved it.
-	*
-	* @param root the in-place root
-	* @param before the root's nodes, collected before the walk
-	*/
 	const _neutralizeEscapedElements = function _neutralizeEscapedElements(root, before) {
 		const reachable = setCreate();
 		arrayForEach(_collectLiveNodes(root), (node) => {
@@ -1655,14 +1457,6 @@ function createDOMPurify() {
 			if (_readNodeType(node) === NODE_TYPE.element && !setHas(reachable, node)) _stripAttributes(node, true);
 		});
 	};
-	/**
-	* Neutralizes everything that left the in-place tree during the call: what
-	* DOMPurify removed, and what hooks or custom elements removed or moved out.
-	*
-	* @param root the in-place root
-	* @param before the root's nodes, collected before the walk
-	* @return true if the root itself was removed
-	*/
 	const _neutralizeDiscarded = function _neutralizeDiscarded(root, before) {
 		let rootRemoved = false;
 		arrayForEach(DOMPurify.removed, (entry) => {
@@ -1675,15 +1469,6 @@ function createDOMPurify() {
 		return rootRemoved;
 	};
 	const MAX_UNVISITED_ROUNDS = 8;
-	/**
-	* The walk only moves forward, so a node moved to a position it already
-	* passed is never visited. Give every original node that is still in the
-	* tree but unvisited the normal treatment, hooks included. Nodes created
-	* during the call are left alone. Fails closed if the tree keeps changing.
-	*
-	* @param root the in-place root
-	* @param before the root's nodes, collected before the walk
-	*/
 	const _sanitizeUnvisitedNodes = function _sanitizeUnvisitedNodes(root, before) {
 		const visited = IN_PLACE_VISITED;
 		let original = null;
@@ -1711,14 +1496,6 @@ function createDOMPurify() {
 			});
 		}
 	};
-	/**
-	* One _sanitizeUnvisitedNodes pass over the root or an open shadow root.
-	*
-	* @param container the root or an open shadow root
-	* @param inShadow whether container is a shadow root
-	* @param root the in-place root
-	* @param original the root's nodes collected before the walk, as a set
-	*/
 	const _sanitizeUnvisitedIn = function _sanitizeUnvisitedIn(container, inShadow, root, original) {
 		const iterator = _createNodeIterator(container);
 		let node;
@@ -1728,39 +1505,14 @@ function createDOMPurify() {
 			_sanitizeNode(node, root);
 		}
 	};
-	/**
-	* Records that _sanitizeElements processed `node`. No-op outside IN_PLACE.
-	*
-	* @param node the node being processed
-	*/
 	const _markVisited = function _markVisited(node) {
 		if (IN_PLACE_VISITED) setAdd(IN_PLACE_VISITED, node);
 	};
-	/**
-	* Patch-linkage attributes (declarative partial updates): `patchsrc`
-	* always, `for` everywhere except on <label> and <output>. Gated on
-	* SAFE_FOR_XML. Shared by the IN_PLACE pre-pass and _isValidAttribute.
-	*
-	* @param lcName the transformCaseFunc'd attribute name
-	* @param lcTag the transformCaseFunc'd tag name of the carrying element
-	* @return true if the attribute is patch linkage and must be dropped
-	*/
 	const _isPatchLinkageAttribute = function _isPatchLinkageAttribute(lcName, lcTag) {
 		if (!SAFE_FOR_XML) return false;
 		if (lcName === "patchsrc") return true;
 		return lcName === "for" && lcTag !== "label" && lcTag !== "output";
 	};
-	/**
-	* IN_PLACE pre-pass: sever all patch linkage before the walk, so no patch
-	* can fire mid-walk into a part of the tree the walker already passed.
-	* Removes range markers (processing instructions, comments with markup)
-	* and strips linkage attributes. It cannot undo a patch that already fired.
-	*
-	* TODO: if the shipped feature can patch through `for` on <label>/<output>,
-	* drop that pair here too.
-	*
-	* @param root the in-place root to sweep
-	*/
 	const _neutralizePatchLinkage = function _neutralizePatchLinkage(root) {
 		if (!SAFE_FOR_XML) return;
 		_walkTree(root, (node) => {
@@ -1782,12 +1534,6 @@ function createDOMPurify() {
 			return true;
 		});
 	};
-	/**
-	* _initDocument
-	*
-	* @param dirty - a string of dirty markup
-	* @return a DOM, filled with the dirty markup
-	*/
 	const _initDocument = function _initDocument(dirty) {
 		let doc = null;
 		let leadingWhitespace = null;
@@ -1812,43 +1558,17 @@ function createDOMPurify() {
 		if (NAMESPACE === HTML_NAMESPACE) return getElementsByTagName.call(doc, WHOLE_DOCUMENT ? "html" : "body")[0];
 		return WHOLE_DOCUMENT ? doc.documentElement : body;
 	};
-	/**
-	* Creates a NodeIterator over `root`. ownerDocument is read through the
-	* cached getter: a form child named "ownerDocument" shadows the direct
-	* read and would make createNodeIterator throw.
-	*
-	* @param root The node to start traversing on.
-	* @param characterDataOnly whether to skip elements
-	* @return The created NodeIterator
-	*/
 	const _createNodeIterator = function _createNodeIterator(root) {
 		let characterDataOnly = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : false;
 		const doc = getOwnerDocument ? getOwnerDocument(root) : root.ownerDocument;
 		return createNodeIterator.call(doc || root, root, (characterDataOnly ? 0 : NodeFilter.SHOW_ELEMENT) | NodeFilter.SHOW_COMMENT | NodeFilter.SHOW_TEXT | NodeFilter.SHOW_PROCESSING_INSTRUCTION | NodeFilter.SHOW_CDATA_SECTION, null);
 	};
-	/**
-	* Replace template expression syntax (mustache, ERB, template
-	* literal) with a space; shared by all SAFE_FOR_TEMPLATES scrub
-	* sites. Order matters: mustache, then ERB, then template literal.
-	*
-	* @param value the string to scrub
-	* @returns the scrubbed string
-	*/
 	const _stripTemplateExpressions = function _stripTemplateExpressions(value) {
 		value = stringReplace(value, MUSTACHE_EXPR$1, " ");
 		value = stringReplace(value, ERB_EXPR$1, " ");
 		value = stringReplace(value, TMPLIT_EXPR$1, " ");
 		return value;
 	};
-	/**
-	* Strips template expressions from the character data under `node`,
-	* template contents included. Runs after the walk, since an expression can
-	* also form when a removed element leaves two text nodes adjacent. Works on
-	* the nodes rather than on markup, which keeps node references intact and
-	* sees `<%` unescaped. Attribute values are handled in _sanitizeAttributes.
-	*
-	* @param node The root element whose character data should be scrubbed.
-	*/
 	const _scrubTemplateExpressions2 = function _scrubTemplateExpressions(node) {
 		var _node$querySelectorAl;
 		_scrubOwnCharacterData(node);
@@ -1857,13 +1577,6 @@ function createDOMPurify() {
 			if (_isDocumentFragment(tmpl.content)) _scrubTemplateExpressions2(tmpl.content);
 		});
 	};
-	/**
-	* Normalizes `node` and strips template expressions from its own character
-	* data. Template contents and shadow roots are not entered, their own
-	* _sanitizeShadowDOM call scrubs them.
-	*
-	* @param node The root whose own character data should be scrubbed.
-	*/
 	const _scrubOwnCharacterData = function _scrubOwnCharacterData(node) {
 		node.normalize();
 		const walker = _createNodeIterator(node, true);
@@ -1873,27 +1586,12 @@ function createDOMPurify() {
 			currentNode = walker.nextNode();
 		}
 	};
-	/**
-	* Detects DOM clobbering on a form, the only element whose named children
-	* shadow its own properties. Each probe compares a direct read with what
-	* the property has to be.
-	*
-	* @param element element to check for clobbering attacks
-	* @return true if clobbered, false if safe
-	*/
 	const _isClobbered = function _isClobbered(element) {
 		const realTagName = getNodeName ? getNodeName(element) : null;
 		if (typeof realTagName !== "string") return false;
 		if (transformCaseFunc(realTagName) !== "form") return false;
 		return typeof element.nodeName !== "string" || typeof element.textContent !== "string" || typeof element.removeChild !== "function" || element.attributes !== getAttributes(element) || typeof element.removeAttribute !== "function" || typeof element.removeAttributeNode !== "function" || typeof element.getAttributeNode !== "function" || typeof element.setAttribute !== "function" || typeof element.namespaceURI !== "string" || typeof element.insertBefore !== "function" || typeof element.hasChildNodes !== "function" || element.nodeType !== getNodeType(element) || element.childNodes !== getChildNodes(element);
 	};
-	/**
-	* Reads nodeType through the cached getter, so the result holds for nodes
-	* from any realm (GHSA-4w3q-35jp-p934) and cannot be clobbered.
-	*
-	* @param value anything
-	* @return the node type, or null if value is not a DOM node
-	*/
 	const _nodeTypeOf = function _nodeTypeOf(value) {
 		if (!getNodeType || typeof value !== "object" || value === null) return null;
 		try {
@@ -1915,17 +1613,6 @@ function createDOMPurify() {
 			hook.call(DOMPurify, currentNode, data, CONFIG);
 		});
 	}
-	/**
-	* Structural-threat checks that condemn a node regardless of the
-	* allowlists: mXSS via namespace confusion, risky CSS construction,
-	* processing instructions, markup-bearing comments. Pure predicate;
-	* the caller removes. Check order is load-bearing.
-	*
-	* @param currentNode the node to inspect
-	* @param tagName the node's transformCaseFunc'd tag name
-	* @param nodeType the node's type, read through the cached getter
-	* @return true if the node must be removed
-	*/
 	const _isUnsafeNode = function _isUnsafeNode(currentNode, tagName, nodeType) {
 		if (SAFE_FOR_XML && nodeType === NODE_TYPE.element && currentNode.hasChildNodes() && !_isNode(currentNode.firstElementChild) && regExpTest(ELEMENT_MARKUP_PROBE, currentNode.textContent) && regExpTest(ELEMENT_MARKUP_PROBE, currentNode.innerHTML)) return true;
 		if (SAFE_FOR_XML && LITERAL_TEXT_ELEMENTS[tagName] && nodeType === NODE_TYPE.element && _readNamespaceURI(currentNode) === HTML_NAMESPACE && (_isNode(currentNode.firstElementChild) || typeof currentNode.textContent === "string" && regExpTest(ELEMENT_MARKUP_PROBE, currentNode.textContent))) return true;
@@ -1933,18 +1620,6 @@ function createDOMPurify() {
 		if (SAFE_FOR_XML && nodeType === NODE_TYPE.comment && regExpTest(COMMENT_MARKUP_PROBE, currentNode.data)) return true;
 		return false;
 	};
-	/**
-	* Evaluate a CUSTOM_ELEMENT_HANDLING check (a RegExp or a predicate
-	* function, per the validation in _parseConfig) against a name.
-	* Additional arguments are forwarded to predicate functions - the
-	* attributeNameCheck predicate receives the tag name as its second
-	* argument. A null/absent check never matches.
-	*
-	* @param check the configured tagNameCheck / attributeNameCheck value
-	* @param name the name to test
-	* @param args extra arguments forwarded to a predicate function
-	* @return true if the check matches the name
-	*/
 	const _matchesNameCheck = function _matchesNameCheck(check, name) {
 		if (check instanceof RegExp) return regExpTest(check, name);
 		if (check instanceof Function) {
@@ -1953,15 +1628,6 @@ function createDOMPurify() {
 		}
 		return false;
 	};
-	/**
-	* Handles a node whose tag is forbidden or not allowlisted: hoists its
-	* content per KEEP_CONTENT and removes it. The one exception is a custom
-	* element allowed via CUSTOM_ELEMENT_HANDLING, which is kept.
-	*
-	* @param currentNode the disallowed node
-	* @param tagName the node's transformCaseFunc'd tag name
-	* @return true if the node was removed, false if kept
-	*/
 	const _sanitizeDisallowedNode = function _sanitizeDisallowedNode(currentNode, tagName, root) {
 		if (!FORBID_TAGS[tagName] && _isBasicCustomElement(tagName) && _matchesNameCheck(CUSTOM_ELEMENT_HANDLING.tagNameCheck, tagName)) return false;
 		if (KEEP_CONTENT && !FORBID_CONTENTS[tagName] && !FORBID_CONTENTS[stringToLowerCase(tagName)]) {
@@ -1978,45 +1644,15 @@ function createDOMPurify() {
 		_forceRemove(currentNode);
 		return true;
 	};
-	/**
-	* Forks an allowlist off its shared binding (the instance default or the
-	* setConfig() capture) before a hook sees it, so a hook's widening stays
-	* within the call. A set that is already call-local is returned as is.
-	*
-	* @param hookList the uponSanitize* hook array for this event
-	* @param set the current ALLOWED_TAGS / ALLOWED_ATTR binding
-	* @param defaultSet the per-instance DEFAULT_ALLOWED_* constant
-	* @param setConfigSet the captured setConfig() binding, or null
-	* @return a call-local clone if a hook is present and set is still shared,
-	*   else set unchanged
-	*/
 	const _forkSharedAllowlist = function _forkSharedAllowlist(hookList, set, defaultSet, setConfigSet) {
 		if (hookList.length === 0) return set;
 		return set === defaultSet || set === setConfigSet ? cloneSet(set) : set;
 	};
-	/**
-	* A hook may have detached the node it was called for. If so, treat it as
-	* removed and stop processing it; the walk root is exempt. On the IN_PLACE
-	* path the detached subtree is neutralized right away.
-	*
-	* @param currentNode the node a hook may have detached
-	* @param root the current walk root
-	* @return true if the node was detached
-	*/
 	const _handleHookDetachedNode = function _handleHookDetachedNode(currentNode, root) {
 		if (currentNode === root || getParentNode(currentNode) !== null) return false;
 		if (IN_PLACE) _neutralizeSubtree(currentNode);
 		return true;
 	};
-	/**
-	* _sanitizeElements
-	*
-	* @protect nodeName
-	* @protect textContent
-	* @protect removeChild
-	* @param currentNode to check for permission to exist
-	* @return true if node was killed, false if left alive
-	*/
 	const _sanitizeElements = function _sanitizeElements(currentNode, root) {
 		_markVisited(currentNode);
 		_executeHooks(hooks.beforeSanitizeElements, currentNode, null);
@@ -2064,14 +1700,6 @@ function createDOMPurify() {
 		_executeHooks(hooks.afterSanitizeElements, currentNode, null);
 		return _handleHookDetachedNode(currentNode, root);
 	};
-	/**
-	* _isValidAttribute
-	*
-	* @param lcTag Lowercase tag name of containing element.
-	* @param lcName Lowercase attribute name.
-	* @param value Attribute value.
-	* @return Returns true if `value` is valid, otherwise false.
-	*/
 	const _isValidAttribute = function _isValidAttribute(lcTag, lcName, value) {
 		if (FORBID_ATTR[lcName]) return false;
 		if (_isPatchLinkageAttribute(lcName, lcTag)) return false;
@@ -2097,29 +1725,9 @@ function createDOMPurify() {
 		"font-face-uri",
 		"missing-glyph"
 	]);
-	/**
-	* _isBasicCustomElement
-	* checks if at least one dash is included in tagName, and it's not the first char
-	* for more sophisticated checking see https://github.com/sindresorhus/validate-element-name
-	*
-	* @param tagName name of the tag of the node to sanitize
-	* @returns Returns true if the tag name meets the basic criteria for a custom element, otherwise false.
-	*/
 	const _isBasicCustomElement = function _isBasicCustomElement(tagName) {
 		return !RESERVED_CUSTOM_ELEMENT_NAMES[stringToLowerCase(tagName)] && regExpTest(CUSTOM_ELEMENT$1, tagName);
 	};
-	/**
-	* Wrap an attribute value in the matching Trusted Types object when
-	* the active policy requires it. Namespaced attributes pass through
-	* unchanged (no TT support yet, see
-	* https://bugs.chromium.org/p/chromium/issues/detail?id=1305293).
-	*
-	* @param lcTag lowercase tag name of the containing element
-	* @param lcName lowercase attribute name
-	* @param namespaceURI the attribute's namespace, if any
-	* @param value the attribute value to wrap
-	* @return the value, wrapped when Trusted Types demand it
-	*/
 	const _applyTrustedTypesToAttribute = function _applyTrustedTypesToAttribute(lcTag, lcName, namespaceURI, value) {
 		if (trustedTypesPolicy && typeof trustedTypes === "object" && typeof trustedTypes.getAttributeType === "function" && !namespaceURI) switch (trustedTypes.getAttributeType(lcTag, lcName)) {
 			case "TrustedHTML": return _createTrustedHTML(value);
@@ -2127,16 +1735,6 @@ function createDOMPurify() {
 		}
 		return value;
 	};
-	/**
-	* Writes a changed attribute value back. If the new value clobbers, the
-	* element is removed; if the write fails, the attribute is.
-	*
-	* @param currentNode the element carrying the attribute
-	* @param name the attribute name as present on the element
-	* @param namespaceURI the attribute's namespace, if any
-	* @param value the new attribute value
-	* @return true if the value was written without introducing clobbering
-	*/
 	const _setAttributeValue = function _setAttributeValue(currentNode, name, namespaceURI, value) {
 		try {
 			if (namespaceURI) currentNode.setAttributeNS(namespaceURI, name, value);
@@ -2151,30 +1749,10 @@ function createDOMPurify() {
 			return false;
 		}
 	};
-	/**
-	* Value checks that apply before a hook can force-keep an attribute. Also
-	* used by isValidAttribute(), so it never approves a value that sanitize()
-	* would strip.
-	*
-	* @param name the attribute name as found on the node (case preserved)
-	* @param value the attribute value
-	* @returns true if the attribute must be removed because of its value
-	*/
 	const _isUnsafeAttributeValue = function _isUnsafeAttributeValue(name, value) {
 		if (SAFE_FOR_XML && regExpTest(ATTR_VALUE_BREAKOUT, value)) return true;
 		return stringToLowerCase(name) === "attributename" && stringIndexOf(value, "href") !== -1;
 	};
-	/**
-	* _sanitizeAttributes
-	*
-	* @protect attributes
-	* @protect nodeName
-	* @protect removeAttribute
-	* @protect setAttribute
-	*
-	* @param currentNode to sanitize
-	* @param root the current walk root
-	*/
 	const _sanitizeAttributes = function _sanitizeAttributes(currentNode, root) {
 		_executeHooks(hooks.beforeSanitizeAttributes, currentNode, null);
 		if (_handleHookDetachedNode(currentNode, root)) return;
@@ -2234,23 +1812,11 @@ function createDOMPurify() {
 		_executeHooks(hooks.afterSanitizeAttributes, currentNode, null);
 		_handleHookDetachedNode(currentNode, root);
 	};
-	/**
-	* Sanitizes one node: the node itself, its attributes and, for a
-	* template, its content.
-	*
-	* @param node the node to sanitize
-	* @param root the current walk root
-	*/
 	const _sanitizeNode = function _sanitizeNode(node, root) {
 		_sanitizeElements(node, root);
 		_sanitizeAttributes(node, root);
 		if (_isDocumentFragment(node.content)) _sanitizeShadowDOM2(node.content);
 	};
-	/**
-	* _sanitizeShadowDOM
-	*
-	* @param fragment to iterate over recursively
-	*/
 	const _sanitizeShadowDOM2 = function _sanitizeShadowDOM(fragment) {
 		let shadowNode = null;
 		const shadowIterator = _createNodeIterator(fragment);
@@ -2269,13 +1835,6 @@ function createDOMPurify() {
 		if (SAFE_FOR_TEMPLATES) _scrubOwnCharacterData(fragment);
 		_executeHooks(hooks.afterSanitizeShadowDOM, fragment, null);
 	};
-	/**
-	* Sanitizes every attached shadow root under `root`, since the node
-	* iterator does not enter shadow trees. Needed for IN_PLACE input and for
-	* DOM input whose clonable shadow roots were copied by importNode().
-	*
-	* @param root the subtree root to walk for attached shadow roots
-	*/
 	const _sanitizeAttachedShadowRoots = function _sanitizeAttachedShadowRoots(root) {
 		const stack = [{
 			node: root,
