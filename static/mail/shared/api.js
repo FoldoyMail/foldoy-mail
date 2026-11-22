@@ -70,7 +70,8 @@ export const api = {
   addContactKeys: (entries, auth) => call('POST', 'contact-keys', { entries, ...(auth ? { auth } : {}) }),
   setKey: body => call('PUT', 'key', body),
   folders: () => call('GET', 'folders'),
-  messages: ({ folder, q, alias, cursor, unread } = {}) => call('GET', `messages?${qs({ folder, q, alias, cursor, unread: unread ? '1' : undefined })}`),
+  messages: ({ folder, q, alias, cursor, unread } = {}) => call('GET', `messages?${qs({ folder, q, alias, cursor, unread: unread ? '1' : undefined })}`)
+    .then(r => { if (r?.moved > 0) { try { dispatchEvent(new CustomEvent('foldoy-moved')); } catch (_) {  } } return r; }),
   message: (id, o = {}) => call('GET', `messages/${encodeURIComponent(id)}${o.images ? '?images=1' : ''}`),
   messageBatch: (ids, o = {}) => (LIVE ? call('GET', `message-batch?${qs({ ids: ids.join(','), images: o.images ? '1' : undefined })}`)
     : Promise.all(ids.map(id => standIn('GET', `messages/${id}${o.images ? '?images=1' : ''}`).catch(() => null))).then(xs => ({ items: xs.filter(Boolean) }))),

@@ -232,9 +232,11 @@ async function checkNew() {
   if (S.me.mailbox !== 'active' || S.me.sending?.hold) return;
   let f; try { f = await api.folders(); } catch { return; }
   const was = (S.folders.find(x => x.role === 'inbox') || {}), now = f.find(x => x.role === 'inbox') || {};
-  S.folders = f; renderRail(); idx.folders(f);
-  if (!(now.total > (was.total ?? now.total) || now.unread > (was.unread ?? now.unread))) return;
-  let r; try { r = await api.messages({ folder: 'inbox' }); } catch { return; }
+  const show = () => { S.folders = f; renderRail(); idx.folders(f); };
+  if (!(now.total > (was.total ?? now.total) || now.unread > (was.unread ?? now.unread))) return show();
+  let r; try { r = await api.messages({ folder: 'inbox' }); } catch { return show(); }
+  if (r.moved > 0) { try { f = await api.folders(); } catch {  } }
+  show();
   const items = await mail.open(r.items);
   S.seen ||= new Set();
   const fresh = items.filter(m => m.unread && !S.seen.has(m.id)).slice(0, 3);
@@ -315,8 +317,7 @@ function renderRail() {
   }).join('');
   const nc = $('#folders .navcur'), lab = nc && nc.querySelector('a > span:not(.n)');
   if (lab && lab.offsetWidth) nc.style.setProperty('--rl', `${lab.offsetLeft + lab.offsetWidth + 2}px`);
-  const inboxUnread = (S.folders.find(f => f.role === 'inbox') || {}).unread || 0;
-  document.title = `${inboxUnread ? `(${inboxUnread}) ` : ''}Inbox · foldoy`;
+  setTitle();
   $('#nav3').innerHTML = `
     <a href="${DEPOSIT_URL}">${icon('addfunds')}<span>Add funds</span><span class="n">${usd(S.me.balance_usd)}</span></a>`;
   $('#nav2').innerHTML = `
@@ -573,6 +574,21 @@ function threadNames(m) {
   return seen.map(p => (mine(p.addr) ? 'me' : (p.name || p.addr).split(/[\s@]/)[0])).join(', ');
 }
 const PLACE_NAMES = { screener: 'Screener', snoozed: 'Snoozed', scheduled: 'Scheduled', starred: 'Starred', all: 'All mail' };
+function setTitle() {
+  const n = (S.folders.find(f => f.role === 'inbox') || {}).unread || 0;
+  const h = (location.hash || '#/f/inbox').replace(/^#\/?/, '').split('/');
+  let id = ''; try { id = decodeURIComponent(h[1] || 'inbox'); } catch (_) { id = 'inbox'; }
+  const place = h[0] === 's' ? 'Search' : h[0] === 'settings' ? 'Settings' : h[0] === 'aliases' ? 'Aliases' : h[0] === 'admin' ? 'Admin'
+    : h[0] === 'compose' ? 'New message' : (S.folders.find(f => f.id === id) || { name: PLACE_NAMES[id] || 'Inbox' }).name;
+  const t = `${n ? `(${n}) ` : ''}${place} · foldoy`;
+  if (document.title !== t) document.title = t;
+}
+addEventListener('hashchange', setTitle);
+addEventListener('foldoy-moved', () => railSoon());
+let lookedAt = 0;
+const lookAgain = () => { if (Date.now() - lookedAt < 5000 || !S.me || S.me.mailbox !== 'active' || !S.folders.length) return; lookedAt = Date.now(); checkNew(); };
+addEventListener('focus', lookAgain);
+addEventListener('pageshow', e => { if (e.persisted) lookAgain(); });
 function folderName() { return S.q ? 'Search' : (S.folders.find(f => f.id === S.folder) || { name: PLACE_NAMES[S.folder] || 'Inbox' }).name; }
 const ltotText = () => S.items.length ? `1-${S.items.length} of ${S.next?.total || (S.next ? `${S.items.length}+` : S.items.length)}` : '';
 function chipsHtml(f) {
