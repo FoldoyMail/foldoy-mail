@@ -228,16 +228,23 @@ function lockedPane() {
 }
 
 const notifyOn = () => recall('foldoy-notify') === '1' && 'Notification' in window && Notification.permission === 'granted';
+const pendingDone = () => (sending.size ? Promise.race([Promise.allSettled([...sending.values()]), new Promise(r => setTimeout(r, 8000))]) : Promise.resolve());
+let againT = 0;
 async function checkNew() {
   if (S.me.mailbox !== 'active' || S.me.sending?.hold) return;
+  await pendingDone();
+  const gen = railGen;
+  const stale = () => { if (gen === railGen) return false; clearTimeout(againT); againT = setTimeout(checkNew, 2000); return true; };
   let f; try { f = await api.folders(); } catch { return; }
+  if (stale()) return;
   const was = (S.folders.find(x => x.role === 'inbox') || {}), now = f.find(x => x.role === 'inbox') || {};
   const show = () => { S.folders = f; renderRail(); idx.folders(f); };
   if (!(now.total > (was.total ?? now.total) || now.unread > (was.unread ?? now.unread))) return show();
-  let r; try { r = await api.messages({ folder: 'inbox' }); } catch { return show(); }
+  let r; try { r = await api.messages({ folder: 'inbox' }); } catch { if (!stale()) show(); return; }
   if (r.moved > 0) { try { f = await api.folders(); } catch {  } }
-  show();
   const items = await mail.open(r.items);
+  if (stale()) return;
+  show();
   S.seen ||= new Set();
   const fresh = items.filter(m => m.unread && !S.seen.has(m.id)).slice(0, 3);
   items.forEach(m => S.seen.add(m.id));
@@ -301,6 +308,7 @@ function claimPane() {
 let railGen = 0;
 async function refreshRail() {
   const pre = S.pre?.folders; if (pre) S.pre.folders = null;
+  if (!pre) await pendingDone();
   const gen = railGen;
   if (S.me.mailbox === 'active') { const f = (pre && await pre) || await api.folders(); if (gen !== railGen) return; S.folders = f; }
   else S.folders = ['Inbox', 'Drafts', 'Sent', 'Archive', 'Junk', 'Trash'].map(n => ({ id: n.toLowerCase(), name: n, role: n.toLowerCase(), unread: 0, total: 0 }));
