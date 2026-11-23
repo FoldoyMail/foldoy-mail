@@ -74,7 +74,21 @@ export function toast(text, action, ms) {
   const pr = !desk && pane && innerWidth > 760 && getComputedStyle(pane).display !== 'none' ? pane.getBoundingClientRect() : null;
   t.style.left = pr ? `${pr.left + pr.width / 2}px` : '';
   t.style.bottom = fr ? `${innerHeight - fr.top + 16}px` : pr ? `${innerHeight - pr.bottom + 20}px` : '';
-  if (desk) { t.style.left = ''; t.style.bottom = ''; }
+  t.style.zIndex = '';
+  if (desk) {
+    t.style.left = ''; t.style.bottom = '';
+    const d = document.querySelector('.dock');
+    if (d && d.offsetWidth) {
+      const dr = d.getBoundingClientRect(), tw = t.offsetWidth || 320, th = t.offsetHeight || 48, W = innerWidth, H = innerHeight;
+      const l = W / 2 - tw / 2, r = W / 2 + tw / 2, b = H - 24, top = b - th;
+      if (r > dr.left - 8 && l < dr.right + 8 && b > dr.top - 8 && top < dr.bottom + 8) {
+        const left = dr.left, right = W - dr.right;
+        if (Math.max(left, right) >= tw + 32) t.style.left = `${Math.round(left >= right ? left / 2 : dr.right + right / 2)}px`;
+        else if (dr.top >= th + 24) t.style.bottom = `${Math.round(H - dr.top + 12)}px`;
+        else t.style.zIndex = '90';
+      }
+    }
+  }
   requestAnimationFrame(() => t.classList.add('on'));
   clearTimeout(tt); tt = setTimeout(() => t.classList.remove('on'), ms || (acts.length ? 6000 : 3200));
 }

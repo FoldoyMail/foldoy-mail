@@ -240,6 +240,7 @@ svg.i { width: 18px; height: 18px; stroke-width: 1.6; }
 .lh { flex: none; display: flex; align-items: center; gap: 10px; height: 60px; padding: 0 12px 0 20px; }
 .lh h1 { min-width: 0; font-size: 20px; font-weight: 600; letter-spacing: -.01em;line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lh .cnt { flex: none; margin-top: 3px; font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lh .cnt.sc { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .lh .sp { margin-left: auto; }
 .lh .pill { flex: none; }
 .menu-btn { display: none; }

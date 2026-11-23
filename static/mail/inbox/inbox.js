@@ -1321,7 +1321,7 @@ function renderReader(m) {
         ${avatar(m.from)}
         <div class="who-t">
           <div class="who-l1"><span class="who-n">${esc(nameOf(m.from))}</span>${sec.icon ? `<span class="sec ${sec.cls}" data-tip="${esc(sec.label)}" aria-label="${esc(sec.label)}" role="img">${icon(sec.icon)}</span>` : ''}${m.from.name ? `<span class="who-a">${esc(m.from.addr)}</span>` : ''}</div>
-          <button class="who-to" type="button" data-act="details" aria-expanded="false" title="Details">${esc(toLine)}<svg class="i" viewBox="0 0 20 20" fill="none" stroke="currentColor" aria-hidden="true"><path d="M6 8l4 4 4-4"/></svg></button>
+          <button class="who-to" type="button" data-act="details" aria-expanded="false" title="Details"><span class="who-tt">${esc(toLine)}</span><svg class="i" viewBox="0 0 20 20" fill="none" stroke="currentColor" aria-hidden="true"><path d="M6 8l4 4 4-4"/></svg></button>
         </div>
         <span class="who-r">
           ${m.unsubscribe && !m.unsubscribed && !unsubbed.has(unsubKey(m.unsubscribe)) ? '<button class="linkbtn unsub" type="button" data-act="unsub" id="unsubnote">Unsubscribe</button>' : ''}

@@ -99,7 +99,7 @@ export function cleanHtml(html, { images = false, cids = {} } = {}) {
     if (node.hasAttribute('style')) { const s = cleanStyle(node.getAttribute('style')); if (s) node.setAttribute('style', s); else node.removeAttribute('style'); }
     if (node.tagName === 'A') {
       const h = (node.getAttribute('href') || '').trim();
-      if (/^(data:|cid:)/i.test(h)) node.removeAttribute('href');
+      if (!/^(https?:|mailto:)/i.test(h.replace(/[\u0000-\u0020]+/g, ''))) node.removeAttribute('href');
       else if (h) node.setAttribute('href', untag(h));
       node.setAttribute('target', '_blank'); node.setAttribute('rel', 'noopener noreferrer nofollow');
     }
