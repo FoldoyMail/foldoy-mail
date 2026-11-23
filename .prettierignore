@@ -1,0 +1,9 @@
+# formatted: the webmail client under static/mail (scripts and stylesheets)
+/*
+!/static/
+/static/*
+!/static/mail/
+static/mail/shared/vendor/
+*.html
+*.svg
+*.json
