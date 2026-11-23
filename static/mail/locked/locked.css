@@ -1,6 +1,22 @@
-.locked-msg { text-align: left; }
-.locked-msg .hl { text-align: left; }
-.locked-msg .lead { text-align: left; }
-.locked-body { margin-top: 24px; padding-top: 20px; border-top: 1px solid rgba(243, 241, 236, .12); font-size: 16px; line-height: 1.6; color: var(--ink);
-  white-space: pre-wrap; overflow-wrap: anywhere; }
-.form-col:has(.locked-msg:not([hidden])) { max-width: 640px; }
+.locked-msg {
+  text-align: left;
+}
+.locked-msg .hl {
+  text-align: left;
+}
+.locked-msg .lead {
+  text-align: left;
+}
+.locked-body {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(243, 241, 236, 0.12);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.form-col:has(.locked-msg:not([hidden])) {
+  max-width: 640px;
+}
