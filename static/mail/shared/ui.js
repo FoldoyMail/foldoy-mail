@@ -24,6 +24,8 @@ const P = {
   dot: '<circle cx="10" cy="10" r="3.5"/>',
   clip: '<path transform="rotate(40 10 10)" d="M13.6 7v6.4a3.6 3.6 0 01-7.2 0V5.9a2.4 2.4 0 014.8 0v7.3a1.2 1.2 0 01-2.4 0V7.3"/>',
   close: '<path d="M5 5l10 10M15 5L5 15"/>',
+  expand: '<path d="M11.5 4.5H15.5V8.5M15.5 4.5L11 9M8.5 15.5H4.5V11.5M4.5 15.5L9 11"/>',
+  shrink: '<path d="M15 9H11V5M11 9L15.5 4.5M5 11H9V15M9 11L4.5 15.5"/>',
   download: '<path d="M10 3.5v9M6.5 9L10 12.5 13.5 9M4 15.5h12"/>',
   copy: '<rect x="7" y="7" width="9" height="9" rx="2"/><path d="M13 7V5.5A1.5 1.5 0 0011.5 4h-6A1.5 1.5 0 004 5.5v6A1.5 1.5 0 005.5 13H7"/>',
   menu: '<path d="M3.5 6h13M3.5 10h13M3.5 14h13"/>',

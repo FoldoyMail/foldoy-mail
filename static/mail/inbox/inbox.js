@@ -1862,6 +1862,7 @@ async function showCompose() {
         <div class="tools">
           <button class="iconbtn back" type="button" data-act="cclose" aria-label="Close">${icon('back')}</button>
           <h2 class="c-h">${title}</h2><span class="sp"></span>
+          <button class="iconbtn" type="button" data-act="cbig" title="${dockGeo.big ? 'Smaller window' : 'Larger window'}" aria-label="${dockGeo.big ? 'Smaller window' : 'Larger window'}" data-desk-only>${icon(dockGeo.big ? 'shrink' : 'expand')}</button>
           <button class="iconbtn" type="button" data-act="cclose" title="Close and keep the draft (Esc)" aria-label="Close and keep the draft" data-desk-only>${icon('close')}</button>
         </div>
         <div class="cf">
@@ -1921,8 +1922,9 @@ async function showCompose() {
       if (hr.top < tb && hr.bottom > tb) pane.scrollTop += hr.bottom - tb + 2;
     });
   } else if (dock) {
-    let d = $('#dock'); if (!d) { d = document.createElement('div'); d.id = 'dock'; d.className = 'dock'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-label', title); document.body.append(d); }
+    let d = $('#dock'); if (!d) { d = document.createElement('div'); d.id = 'dock'; d.className = 'dock'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-label', title); document.body.append(d); dockWire(d); }
     d.innerHTML = html;
+    dockFit(d);
   } else { pane.innerHTML = html; pane.scrollTop = 0; }
   const f = $('#cform');
   $('#cfrom').addEventListener('change', e => { if (e.target.value === '__new') composeAlias(); });
@@ -2498,6 +2500,66 @@ function sendLater(v) {
   if (!iso) return;
   c.send_at = iso; send();
 }
+const DOCK_KEY = 'foldoy-dock', DOCK_MIN = [420, 360];
+let dockGeo = {};
+try { const g = JSON.parse(localStorage.getItem(DOCK_KEY) || '{}'); if (g && typeof g === 'object') dockGeo = g; } catch (_) {  }
+const dockSave = () => { try { localStorage.setItem(DOCK_KEY, JSON.stringify(dockGeo)); } catch (_) {  } };
+const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), Math.max(lo, hi));
+function dockBox() {
+  const W = innerWidth, H = innerHeight;
+  if (dockGeo.big) { const w = Math.min(1040, W - 96), h = H - 96; return { w, h, r: Math.round((W - w) / 2), b: 48 }; }
+  if (!Number.isFinite(dockGeo.w) && !Number.isFinite(dockGeo.r)) return null;
+  const w = clamp(dockGeo.w || 620, Math.min(DOCK_MIN[0], W - 16), W - 16), h = clamp(dockGeo.h || 640, Math.min(DOCK_MIN[1], H - 16), H - 16);
+  return { w, h, r: clamp(dockGeo.r ?? 24, 0, W - w), b: clamp(dockGeo.b ?? 0, 0, H - h) };
+}
+function dockFit(d) {
+  d = d || $('#dock'); if (!d) return;
+  if (!d.querySelector('.dk')) d.insertAdjacentHTML('beforeend', '<i class="dk dk-n" aria-hidden="true"></i><i class="dk dk-w" aria-hidden="true"></i><i class="dk dk-nw" aria-hidden="true"></i>');
+  const g = dockBox();
+  for (const [k, v] of [['width', g && g.w], ['height', g && g.h], ['right', g && g.r], ['bottom', g && g.b]]) d.style[k] = g ? `${v}px` : '';
+  d.classList.toggle('free', !!g && g.b > 0);
+}
+function dockBig() {
+  if (dockGeo.big) { dockGeo = dockGeo.prev || {}; } else { dockGeo = { big: true, prev: dockGeo.big ? {} : dockGeo }; }
+  dockSave(); dockFit();
+  const b = $('#dock [data-act="cbig"]');
+  if (b) { const big = !!dockGeo.big; b.innerHTML = icon(big ? 'shrink' : 'expand'); b.title = big ? 'Smaller window' : 'Larger window'; b.setAttribute('aria-label', b.title); }
+}
+function dockWire(d) {
+  d.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    const edge = e.target.closest('.dk');
+    const bar = !edge && e.target.closest('.tools') && !e.target.closest('button, a, input, select');
+    if (!edge && !bar) return;
+    e.preventDefault();
+    const r0 = d.getBoundingClientRect(), W = innerWidth, H = innerHeight;
+    const s = { x: e.clientX, y: e.clientY, w: r0.width, h: r0.height, r: W - r0.right, b: H - r0.bottom };
+    const kind = edge ? (edge.classList.contains('dk-nw') ? 'nw' : edge.classList.contains('dk-n') ? 'n' : 'w') : 'move';
+    let moved = false;
+    d.classList.add(kind === 'move' ? 'moving' : 'sizing'); document.body.classList.add('dock-drag');
+    try { d.setPointerCapture(e.pointerId); } catch (_) {  }
+    const move = ev => {
+      const dx = ev.clientX - s.x, dy = ev.clientY - s.y;
+      if (!moved && Math.abs(dx) + Math.abs(dy) < 3) return;
+      moved = true;
+      let { w, h, r, b } = s;
+      if (kind === 'move') { r = clamp(s.r - dx, 0, W - w); b = clamp(s.b - dy, 0, H - h); }
+      if (kind === 'w' || kind === 'nw') w = clamp(s.w - dx, Math.min(DOCK_MIN[0], W - 16), W - s.r - 8);
+      if (kind === 'n' || kind === 'nw') h = clamp(s.h - dy, Math.min(DOCK_MIN[1], H - 16), H - s.b - 8);
+      dockGeo = { w: Math.round(w), h: Math.round(h), r: Math.round(r), b: Math.round(b) };
+      dockFit(d);
+    };
+    const end = () => {
+      d.removeEventListener('pointermove', move); d.removeEventListener('pointerup', end); d.removeEventListener('pointercancel', end);
+      d.classList.remove('moving', 'sizing'); document.body.classList.remove('dock-drag');
+      if (moved) { dockSave(); const b = $('#dock [data-act="cbig"]'); if (b) { b.innerHTML = icon('expand'); b.title = 'Larger window'; b.setAttribute('aria-label', b.title); } }
+    };
+    d.addEventListener('pointermove', move); d.addEventListener('pointerup', end); d.addEventListener('pointercancel', end);
+  });
+  d.addEventListener('dblclick', e => { if (e.target.closest('.tools') && !e.target.closest('button, a, input, select')) dockBig(); });
+}
+addEventListener('resize', () => dockFit());
+
 async function composeAlias() {
   const c = S.compose; if (!c) return;
   read();
@@ -3960,6 +4022,7 @@ document.addEventListener('click', async e => {
   if (a === 'sback') { location.hash = '#/settings'; return; }
   if (a === 'aback') { location.hash = '#/aliases'; if (phone()) app.dataset.depth = 'list'; return; }
   if (a === 'cclose') return closeCompose(false);
+  if (a === 'cbig') return dockBig();
   if (a === 'discard') return closeCompose(true);
   if (a === 'quote') { const ed = $('#ced'); if (ed) { const q = S.compose.quote.replace(/^\n+/, '').split('\n'), head = q.shift(); ed.insertAdjacentHTML('beforeend', `<div><br></div><div>${esc(head)}</div><blockquote>${q.map(l => esc(l.replace(/^> ?/, ''))).join('<br>')}</blockquote>`); ed.dispatchEvent(new Event('input')); }
     const ta = $('#ctext'); ta.value = ta.value.replace(/\s+$/, '') + S.compose.quote; S.compose.quote = ''; S.compose.dirty = true; t.remove(); ta.focus(); return; }
