@@ -20,12 +20,35 @@
 <link rel="modulepreload" href="{% static 'mail/shared/vendor/openpgp.min.js' %}">
 <link rel="preload" as="script" href="/static/mail/shared/vendor/argon2.umd.min.js">
 </head>
-<body data-home="{{ home_host }}" data-mode="{{ mode }}" data-pow-worker="{% static 'mail/shared/pow-worker.js' %}" data-paid="{% if paid_open %}1{% else %}0{% endif %}" data-reset="{% if reset_open %}1{% else %}0{% endif %}">
+<body data-home="{{ home_host }}" data-mode="{{ mode }}" data-pow-worker="{% static 'mail/shared/pow-worker.js' %}" data-paid="{% if paid_open %}1{% else %}0{% endif %}" data-plans="{% if plan_step %}1{% else %}0{% endif %}" data-reset="{% if reset_open %}1{% else %}0{% endif %}">
 <div class="xwrap">
 <main class="split">
   <div class="form-col">
+    {% if plan_step %}
+    <form class="step plans" id="plan" novalidate hidden>
+      <h1 class="hl" tabindex="-1">Choose your plan</h1>
+      <div class="plan-set" role="radiogroup" aria-label="Plan">
+        {% for c in plan_cards %}<label class="plan"><input type="radio" name="plan" value="{{ c.id }}"{% if c.id == "plus" %} checked{% endif %}><span class="plan-top"><span class="plan-name">{{ c.name }}</span><span class="plan-dot" aria-hidden="true"></span></span><span class="plan-price"><b>{{ c.price }}</b>{% if c.paid %}<span>a month</span>{% endif %}</span><ul class="plan-facts">{% for f in c.facts %}<li><svg class="i" viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 10.5l3.5 3.5 7.5-8"/></svg><span>{{ f }}</span></li>{% endfor %}</ul>{% if c.fine %}<span class="plan-fine">{{ c.fine }}</span>{% endif %}</label>
+        {% endfor %}
+      </div>
+      <p class="plan-note" id="plannote">Paid plans start when you add funds: {{ plan_pay }}, ${{ plan_min }} or more.</p>
+      <div class="acts"><button class="pill light" type="submit">Continue</button></div>
+      <p class="switch">Have an account? <a href="{% url 'login' %}" data-mode="login">Log in</a></p>
+    </form>
+
+    <form class="step plans" id="dom" novalidate hidden>
+      <h1 class="hl" tabindex="-1">Choose your domain</h1>
+      <div class="plan-set dom-set" role="radiogroup" aria-label="Domain">
+        {% for d in plan_domains %}<label class="plan"{% if d.plan %} data-plan="{{ d.plan }}"{% endif %}><input type="radio" name="dom" value="{{ d.domain }}"{% if forloop.first %} checked{% endif %}><span class="plan-top"><span class="plan-name">@{{ d.domain }}</span><span class="plan-dot" aria-hidden="true"></span></span><span class="dom-who">{{ d.who }}</span></label>
+        {% endfor %}
+      </div>
+      <div class="acts"><button class="pill line" type="button" id="domback">Back</button><button class="pill light" type="submit">Continue</button></div>
+    </form>
+    {% endif %}
+
     <form class="step" id="auth" novalidate>
       <h1 class="hl" tabindex="-1" id="authh">{% if mode == "signup" %}Create your account{% else %}Log in to foldoy{% endif %}</h1>
+      {% if plan_step %}<p class="planline" id="planline" hidden><span id="planname"></span><button type="button" id="planchange">Change</button></p>{% endif %}
       <div class="fields">
         <label class="label" for="addr" id="addrl">Address</label>
         <div class="field" id="addrf"{% if mode == "signup" %} hidden{% endif %}><input id="addr" type="email" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="you@foldoy.com"></div>

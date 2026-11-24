@@ -29,11 +29,11 @@ if (DEMO && typeof document !== 'undefined')
 const LIVE = !DEMO;
 const BASE = '/mail/api/';
 export const PLANS_URL = location.hostname.startsWith('mail.')
-  ? `https://${location.hostname.slice(5)}/auth/sso/?next=/pricing/`
+  ? `${location.protocol}//${location.hostname.slice(5)}/auth/sso/?next=/pricing/`
   : '/pricing/';
 export const siteUrl = path =>
   location.hostname.startsWith('mail.')
-    ? `https://${location.hostname.slice(5)}/auth/sso/?next=${encodeURIComponent(path)}`
+    ? `${location.protocol}//${location.hostname.slice(5)}/auth/sso/?next=${encodeURIComponent(path)}`
     : path;
 let csrf = '';
 
@@ -120,6 +120,7 @@ export const api = {
   pow: () => call('GET', 'pow'),
   invites: () => call('GET', 'invites'),
   makeInvite: () => call('POST', 'invites', {}),
+  invitePayout: address => sess(call('POST', 'invite/payout', { address })),
   unlockSending: () => sess(call('POST', 'unlock-sending', {})),
   setAppearance: change => sess(call('POST', 'appearance', change)),
   applyToSend: note => sess(call('POST', 'send-application', { note: note || '' })),

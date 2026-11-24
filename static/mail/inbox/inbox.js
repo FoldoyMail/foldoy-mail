@@ -64,7 +64,7 @@ const ORDERS = 'orders@foldoy.com';
 const DEPOSIT_URL = siteUrl('/account/deposit/');
 const goUrl = () => (S.me.deposits_open ? DEPOSIT_URL : PLANS_URL);
 const SEES_URL = location.hostname.startsWith('mail.')
-  ? `https://${location.hostname.slice(5)}/what-we-can-see/`
+  ? `${location.protocol}//${location.hostname.slice(5)}/what-we-can-see/`
   : '/what-we-can-see/';
 const PLAN = { free: 'Free', plus: 'foldoy+', polar: 'Polar' };
 const usd = n => `$${Number(n || 0).toFixed(2)}`;
@@ -523,26 +523,33 @@ function lockedPane() {
   const at = when
     ? `${dayMonth(s.opens)}, ${when.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
     : '';
-  const [h, p, go, note] = s.rejected
-    ? [
-        "This account wasn't approved.",
-        'Write to support@foldoy.com from another address if you think we got it wrong.',
-        '',
-      ]
-    : s.applied
-      ? ['Waiting for approval.', 'Log in again later; your mail is kept for you.', '']
-      : s.can_apply
+  const [h, p, go, note] =
+    s.hold_kind === 'plan'
+      ? [
+          'This address opens with Polar.',
+          'It comes with Polar. Add funds and Polar starts when the deposit arrives.',
+          '',
+        ]
+      : s.rejected
         ? [
-            'Ask for approval.',
-            'Accounts made over a VPN or Tor are checked before they can be used. Ask now, or add funds to open it at once.',
-            '<button class="pill light md" type="button" data-act="askok">Request approval</button>',
-            true,
-          ]
-        : [
-            'Your account is locked for now.',
-            `Accounts made over a VPN or Tor are checked before they can be used. Add funds from $10 to open it at once, or ask for approval from ${esc(at)}.`,
+            "This account wasn't approved.",
+            'Write to support@foldoy.com from another address if you think we got it wrong.',
             '',
-          ];
+          ]
+        : s.applied
+          ? ['Waiting for approval.', 'Log in again later; your mail is kept for you.', '']
+          : s.can_apply
+            ? [
+                'Ask for approval.',
+                'Accounts made over a VPN or Tor are checked before they can be used. Ask now, or add funds to open it at once.',
+                '<button class="pill light md" type="button" data-act="askok">Request approval</button>',
+                true,
+              ]
+            : [
+                'Your account is locked for now.',
+                `Accounts made over a VPN or Tor are checked before they can be used. Add funds from $10 to open it at once, or ask for approval from ${esc(at)}.`,
+                '',
+              ];
   const fund = s.rejected
     ? ''
     : `<a class="pill ${go ? 'line' : 'light'} md" href="/account/deposit/">Add funds</a>`;
@@ -7755,6 +7762,42 @@ function drawSettings(sec) {
       }
       ${sendingGroup(sentToday && S.me.sending.tier !== 'hold' ? wall('sending', `That's the most mail for a day (${S.me.sending.messages}). Try again tomorrow.`, again) : '')}
       ${
+        S.me.invite
+          ? group(
+              'h-ref',
+              'Invite link',
+              `<ul class="kv">
+          ${row('Your link', `<b class="strong long">${esc(S.me.invite.link)}</b>`, `<button class="pill line sm" type="button" data-copy="${esc(S.me.invite.link)}">Copy</button>`, `When someone signs up through it and deposits $${esc(S.me.invite.min)} in crypto, you get $${esc(S.me.invite.bonus)}${S.me.invite.payout.open ? ', once per person: as credit, or paid to you in Monero.' : ' of credit, once per person.'}`)}
+          ${row('Friends who joined', `<b>${esc(String(S.me.invite.joined))}</b>`, '')}
+          ${row('Reward earned', `<b>$${esc(S.me.invite.earned)}</b>`, '')}
+          ${
+            S.me.invite.payout.open && S.me.invite.payout.can
+              ? row(
+                  'Get paid in Monero',
+                  '',
+                  `<form class="inlinef" id="payf"><label class="sr" for="payaddr">Your Monero address</label><input id="payaddr" maxlength="120" placeholder="Your Monero address" autocomplete="off" spellcheck="false"><button class="pill line sm" type="submit">Request payout</button></form>`,
+                  `$${esc(S.me.invite.payout.payable)} can be paid out. We send it within a week.`,
+                )
+              : ''
+          }
+          ${S.me.invite.payout.rows
+            .map(p =>
+              row(
+                p.status === 'paid'
+                  ? 'Paid in Monero'
+                  : p.status === 'refused'
+                    ? 'Payout not sent'
+                    : 'Payout requested',
+                `<b>$${esc(p.usd)}</b>`,
+                '',
+              ),
+            )
+            .join('')}
+        </ul>`,
+            )
+          : ''
+      }
+      ${
         S.me.plan !== 'free'
           ? group(
               'h-inv',
@@ -8189,6 +8232,20 @@ function drawSettings(sec) {
       <h2 tabindex="-1" id="h-sec">${title}</h2>
       ${body[cur]()}
     </div>`;
+  const payf = $('#payf');
+  if (payf)
+    onSubmit(payf, async e => {
+      e.preventDefault();
+      const v = $('#payaddr').value.trim();
+      if (!v) return;
+      try {
+        S.me = await api.invitePayout(v);
+        toast('Payout requested');
+      } catch (x) {
+        toast(x.message);
+      }
+      showSettings();
+    });
   const nff = $('#nff');
   if (nff)
     onSubmit(nff, async e => {

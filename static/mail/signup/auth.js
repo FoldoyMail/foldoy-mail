@@ -1,4 +1,4 @@
-import { api, pgp, account, FOLDOY, DEMO } from '../shared/api.js';
+import { api, pgp, account, FOLDOY, DEMO, siteUrl } from '../shared/api.js';
 import { $, $$, esc, picker, icon, DOMAINS, FREE_DOMAIN, copy } from '../shared/ui.js';
 import { solve } from '../shared/pow.js';
 
@@ -18,7 +18,8 @@ const NEXT = (() => {
     const u = new URL(n, location.href),
       home = document.body.dataset.home;
     if (u.origin === location.origin && !u.pathname.startsWith('//')) return u.pathname + u.search;
-    if (home && u.origin === `https://${home}` && u.pathname === '/auth/sso/') return u.href;
+    if (home && u.origin === `${location.protocol}//${home}` && u.pathname === '/auth/sso/')
+      return u.href;
   } catch (_) {}
   return '/mail/';
 })();
@@ -28,9 +29,65 @@ const form = $('#auth'),
   pw = $('#pw'),
   rule = $('#pwrule');
 
+const PLAN_STEP = document.body.dataset.plans === '1' && !!$('#plan');
+const PL = { plan: false, done: false };
+const planPicked = () => $('#plan input[name="plan"]:checked')?.value || 'free';
+const domPicked = () => $('#dom input[name="dom"]:checked')?.value || FREE_DOMAIN;
+const planPaid = () => planPicked() !== 'free';
+function planLine() {
+  const line = $('#planline');
+  if (!line) return;
+  const on = PLAN_STEP && st.mode === 'signup' && PL.done;
+  line.hidden = !on;
+  if (!on) return;
+  const card = $('#plan input[name="plan"]:checked').closest('.plan');
+  const price = planPaid() ? ` · ${$('.plan-price b', card).textContent} a month` : '';
+  $('#planname').textContent =
+    `${$('.plan-name', card).textContent}${price} · @${st.domain || domPicked()}`;
+}
+function planDomains() {
+  for (const card of $$('#dom .plan')) {
+    const needs = card.dataset.plan,
+      off = !!needs && needs !== planPicked(),
+      input = $('input', card);
+    input.disabled = off;
+    card.classList.toggle('off', off);
+    if (off && input.checked) $('#dom input:not(:disabled)').checked = true;
+  }
+}
+const afterSignup = () =>
+  PL.done && planPaid() && !new URLSearchParams(location.search).get('next')
+    ? siteUrl('/account/deposit/')
+    : NEXT;
+if (PLAN_STEP) {
+  const q = new URLSearchParams(location.search);
+  const pre = $(`#plan input[value="${CSS.escape(q.get('plan') || '')}"]`);
+  if (pre) pre.checked = true;
+  const note = () => ($('#plannote').style.visibility = planPaid() ? 'visible' : 'hidden');
+  note();
+  planDomains();
+  const dom = $(`#dom input[value="${CSS.escape(q.get('domain') || '')}"]`);
+  if (dom && !dom.disabled) dom.checked = true;
+  $('#plan').addEventListener('change', note);
+  $('#plan').addEventListener('submit', e => {
+    e.preventDefault();
+    PL.plan = true;
+    planDomains();
+    location.hash = 'domain';
+  });
+  $('#dom').addEventListener('submit', e => {
+    e.preventDefault();
+    PL.done = true;
+    pk.set(pk.get().name || '', domPicked());
+    location.hash = '';
+  });
+  $('#domback').addEventListener('click', () => (location.hash = 'plan'));
+  $('#planchange').addEventListener('click', () => (location.hash = 'plan'));
+}
+
 function show(id) {
   $$('.step').forEach(s => (s.hidden = s.id !== id));
-  const i = $(`#${id} input:not([hidden])`);
+  const i = id === 'plan' || id === 'dom' ? null : $(`#${id} input:not([hidden])`);
   (i || $(`#${id} .hl`))?.focus({ preventScroll: true });
 }
 $$('[data-show]').forEach(b => {
@@ -117,6 +174,7 @@ const pk = picker($('#picker'), {
           )} open with Polar, when paid plans open. Until then, take ${n || 'yourname'}@${FREE_DOMAIN}.`,
   onChange: v => {
     Object.assign(st, v);
+    planLine();
     st.ok = false;
     clearTimeout(timer);
     timer = setTimeout(check, 220);
@@ -329,6 +387,7 @@ async function signUp() {
       accept: true,
       pow,
       ...(INVITE ? { invite: INVITE } : {}),
+      ...(PLAN_STEP && PL.done ? { plan: planPicked() } : {}),
     });
     await pgp.remember(s.address);
     try {
@@ -336,7 +395,7 @@ async function signUp() {
     } catch {}
     pw.value = '';
     if (s.recovery?.set && $('#rc')) return showCode(k.code, s.address);
-    location.replace(NEXT);
+    location.replace(afterSignup());
   } catch (x) {
     err.textContent = x.message;
     if (sent && human.dataset.state === 'done') verify();
@@ -381,7 +440,7 @@ function showCode(code, address) {
   };
   $('#rcdone').onclick = () => {
     $('#rcv').textContent = '';
-    location.replace(NEXT);
+    location.replace(afterSignup());
   };
   history.replaceState(null, '', '/signup/#recovery-code');
   show('rc');
@@ -633,6 +692,15 @@ function route() {
   if (h === 'new' && R.code) return show('r3');
   if (h === 'done') return show('r4');
   mode(pathMode());
+  if (PLAN_STEP && st.mode === 'signup') {
+    if (h === 'domain' && PL.plan) return show('dom');
+    if (h === 'plan' || !PL.done) {
+      if (h !== 'plan')
+        history.replaceState(null, '', `${location.pathname}${location.search}#plan`);
+      return show('plan');
+    }
+  }
+  planLine();
   $$('.step').forEach(s => (s.hidden = s.id !== 'auth'));
   (st.mode === 'signup' ? pk : $('#addr')).focus();
 }
