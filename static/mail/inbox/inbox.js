@@ -547,7 +547,7 @@ function lockedPane() {
               ]
             : [
                 'Your account is locked for now.',
-                `Accounts made over a VPN or Tor are checked before they can be used. Add funds from $10 to open it at once, or ask for approval from ${esc(at)}.`,
+                `Accounts made over a VPN or Tor are checked before they can be used. Add funds to open it at once, or ask for approval from ${esc(at)}.`,
                 '',
               ];
   const fund = s.rejected
