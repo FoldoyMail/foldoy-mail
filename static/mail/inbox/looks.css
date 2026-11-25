@@ -4465,6 +4465,36 @@ body .toast .tx {
 .adm-req .a-acts {
   margin-top: 20px;
 }
+.adm-req .adm-before {
+  margin-top: 20px;
+  color: var(--ink-2);
+}
+.adm-req .adm-why {
+  margin-top: 20px;
+}
+.adm-req .adm-why[hidden] {
+  display: none;
+}
+.adm-req .adm-why textarea {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: var(--r-pop);
+  background: var(--ctl);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.lockst .why {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
 .lockst .asknote {
   width: min(100%, 420px);
   margin: 6px auto 2px;

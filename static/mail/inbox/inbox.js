@@ -530,14 +530,17 @@ function lockedPane() {
           'It comes with Polar. Add funds and Polar starts when the deposit arrives.',
           '',
         ]
-      : s.rejected
-        ? [
-            "This account wasn't approved.",
-            'Write to support@foldoy.com from another address if you think we got it wrong.',
-            '',
-          ]
-        : s.applied
-          ? ['Waiting for approval.', 'Log in again later; your mail is kept for you.', '']
+      : s.applied
+        ? ['Waiting for approval.', 'Log in again later; your mail is kept for you.', '']
+        : s.rejected
+          ? [
+              'Your request was turned down.',
+              s.reject_reason
+                ? `<span class="why">Reason: ${esc(s.reject_reason)}</span> You can answer and ask again.`
+                : 'No reason was given. You can ask again.',
+              '<button class="pill light md" type="button" data-act="askok">Ask again</button>',
+              true,
+            ]
           : s.can_apply
             ? [
                 'Ask for approval.',
@@ -558,7 +561,7 @@ function lockedPane() {
     <h2>${h}</h2>
     <p><b>${esc(S.me.address || '')}</b></p>
     <p>${p}</p>
-    ${note ? '<div class="asknote"><textarea id="asknote" maxlength="1000" rows="3" placeholder="Anything we should know? Optional" aria-label="A message with your request"></textarea></div>' : ''}
+    ${note ? `<div class="asknote"><textarea id="asknote" maxlength="1000" rows="3" placeholder="${s.rejected ? 'Your answer' : 'Anything we should know? Optional'}" aria-label="A message with your request"></textarea></div>` : ''}
     <p class="say bad" id="askerr" aria-live="assertive"></p>
     <div class="acts">${go}${fund}<button class="pill ghost md" type="button" data-act="logout">Log out</button></div>
     <p class="lockmore"><a href="mailto:support@foldoy.com">support@foldoy.com</a><button class="linkbtn" type="button" id="lockdel">Delete account</button></p>
