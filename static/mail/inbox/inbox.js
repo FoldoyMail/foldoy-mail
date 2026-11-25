@@ -3264,8 +3264,8 @@ function sentSec(m) {
     cls: '',
     label:
       outside.length === rec.length
-        ? 'Sent readable to outside addresses. Your copy is encrypted.'
-        : 'End-to-end to foldoy addresses, readable to the others. Your copy is encrypted.',
+        ? 'Sent without encryption. Your copy is encrypted.'
+        : 'Encrypted for foldoy addresses only. Your copy is encrypted.',
   };
 }
 async function sentKeys(m) {
@@ -4954,7 +4954,7 @@ async function whoGets() {
     );
   if (k.plain.length && !c.lock)
     lines.push(
-      `<p><span>${k.e2e.length ? 'Ordinary mail for ' + esc(list3(k.plain)) + '. It leaves foldoy readable.' : 'Ordinary mail. Outside addresses get it readable.'}</span><button class="linkbtn" type="button" data-act="lockon">Encrypt with a password</button></p>`,
+      `<p><span>${k.e2e.length ? 'Not encrypted for ' + esc(list3(k.plain)) + '.' : "This email won't be encrypted."}</span><button class="linkbtn" type="button" data-act="lockon">Encrypt with a password</button></p>`,
     );
   if (k.plain.length && c.lock)
     lines.push(
@@ -7246,7 +7246,7 @@ function drawSettings(sec) {
             <label class="label" for="arto">Until <span>optional</span></label><input type="date" id="arto" value="${dayVal(ar.to)}"></div>
           <div class="acts"><button class="pill light md" type="submit">Save</button><span class="say" id="arsay" aria-live="polite"></span></div>
         </form>`,
-        { lede: 'The mail server keeps this reply readable, because it sends it for you.' },
+        { lede: 'This reply is not encrypted, because our server sends it for you.' },
       )}
       ${group(
         'h-note',
