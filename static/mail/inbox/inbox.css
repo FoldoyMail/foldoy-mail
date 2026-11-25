@@ -10460,3 +10460,46 @@ html:root :is(.me-b, .ac-id, .acct .me-a) .av {
     display: none;
   }
 }
+
+@media (max-width: 760px) and (hover: none) {
+  .fchips[hidden] {
+    display: none;
+  }
+  body .app[data-view='mail'] .list:has(> .fchips[hidden])::before {
+    height: calc(10px + env(safe-area-inset-top));
+  }
+  .app[data-view='mail'] .list:has(> .fchips[hidden]) .rows {
+    padding-top: calc(10px + env(safe-area-inset-top));
+  }
+  .app[data-view='mail'] .list:has(> .fchips[hidden]) > .lockbar,
+  .app[data-view='mail'] .list:has(> .fchips[hidden]) > .welcome {
+    margin-top: calc(10px + env(safe-area-inset-top));
+  }
+  .ptitle .punread {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    height: 30px;
+    margin-right: 4px;
+    padding: 0 13px;
+    border-radius: 15px;
+    font-size: 13.5px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--ink-2);
+    box-shadow: inset 0 0 0 1px var(--ring-2);
+  }
+  .ptitle .punread[aria-pressed='true'] {
+    background: var(--accent);
+    color: var(--accent-ink);
+    box-shadow: none;
+  }
+}
+.punread {
+  display: none;
+}
+@media (max-width: 760px) and (hover: none) {
+  .ptitle .punread {
+    display: inline-flex;
+  }
+}
