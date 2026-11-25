@@ -544,7 +544,7 @@ function lockedPane() {
           : s.can_apply
             ? [
                 'Ask for approval.',
-                'Accounts made over a VPN or Tor are checked before they can be used. Ask now, or add funds to open it at once.',
+                'Accounts made over a VPN or Tor are checked before they can be used. Tell us what you will use it for, or add funds to open it at once.',
                 '<button class="pill light md" type="button" data-act="askok">Request approval</button>',
                 true,
               ]
@@ -561,7 +561,7 @@ function lockedPane() {
     <h2>${h}</h2>
     <p><b>${esc(S.me.address || '')}</b></p>
     <p>${p}</p>
-    ${note ? `<div class="asknote"><textarea id="asknote" maxlength="1000" rows="3" placeholder="${s.rejected ? 'Your answer' : 'Anything we should know? Optional'}" aria-label="A message with your request"></textarea></div>` : ''}
+    ${note ? `<div class="asknote"><textarea id="asknote" maxlength="1000" rows="3" placeholder="${s.rejected ? 'Your answer' : 'What will you use this account for?'}" aria-label="What you will use the account for"></textarea></div>` : ''}
     <p class="say bad" id="askerr" aria-live="assertive"></p>
     <div class="acts">${go}${fund}<button class="pill ghost md" type="button" data-act="logout">Log out</button></div>
     <p class="lockmore"><a href="mailto:support@foldoy.com">support@foldoy.com</a><button class="linkbtn" type="button" id="lockdel">Delete account</button></p>
@@ -576,9 +576,15 @@ function lockedPane() {
   const b = $('[data-act="askok"]');
   if (b)
     b.onclick = async () => {
+      const why = ($('#asknote')?.value || '').trim();
+      if (why.length < 10) {
+        $('#askerr').textContent = 'Tell us in a sentence what you will use the account for.';
+        $('#asknote')?.focus();
+        return;
+      }
       b.setAttribute('aria-busy', 'true');
       try {
-        S.me = await api.applyToSend($('#asknote')?.value || '');
+        S.me = await api.applyToSend(why);
         lockedPane();
       } catch (x) {
         $('#askerr').textContent = x.message;
