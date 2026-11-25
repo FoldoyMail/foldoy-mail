@@ -347,5 +347,22 @@ export function cleanHtml(html, { images = false, cids = {} } = {}) {
     KEEP_CONTENT: true,
     WHOLE_DOCUMENT: false,
   });
-  return { html: clean, css, held, trackers, usedCids, styled: !!css || STYLED.test(clean) };
+  const plain = unframed(clean);
+  return { html: plain, css, held, trackers, usedCids, styled: !!css || STYLED.test(plain) };
+}
+const BLACK = /^(#000(000)?|black|rgb\(0,\s*0,\s*0\))$/i;
+const WHITE = /^(#fff(fff)?|white|rgb\(255,\s*255,\s*255\))$/i;
+export function unframed(clean) {
+  if (!/^\s*<div\b/i.test(clean)) return clean;
+  const t = document.createElement('template');
+  t.innerHTML = clean;
+  const kids = [...t.content.childNodes].filter(
+    n => n.nodeType === 1 || (n.nodeType === 3 && n.nodeValue.trim()),
+  );
+  const d =
+    kids.length === 1 && kids[0].nodeType === 1 && kids[0].tagName === 'DIV' ? kids[0] : null;
+  if (!d || !BLACK.test(d.style.color) || !WHITE.test(d.style.backgroundColor)) return clean;
+  d.removeAttribute('style');
+  d.removeAttribute('bgcolor');
+  return t.innerHTML;
 }
