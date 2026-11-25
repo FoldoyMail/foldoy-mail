@@ -1470,7 +1470,7 @@ const ltotText = () =>
     : '';
 function chipsHtml(f) {
   if (S.q) return '';
-  if (S.me.folder_bar === false) return '<nav class="fchips" aria-label="Folders" hidden></nav>';
+  if (S.me.folder_bar !== true) return '<nav class="fchips" aria-label="Folders" hidden></nav>';
   const ordered = S.folders
     .filter(x => x.role !== 'admin' && x.role !== 'all')
     .sort(
@@ -1491,7 +1491,7 @@ function bigTitle(f) {
   if (S.q) return '';
   return `<div class="ptitle"><h2>${esc(folderName())}${f && f.unread ? ` <span class="pc">${f.unread}</span>` : ''}</h2>
     ${S.me.plan === 'free' && S.me.plans_open ? `<a class="pupg" href="${PLANS_URL}">Upgrade</a>` : ''}
-    ${S.me.folder_bar === false && (S.items.length || S.unreadOnly) && !['drafts', 'sent', 'scheduled'].includes(S.folder) ? `<button class="punread" type="button" data-act="unreadonly" aria-pressed="${S.unreadOnly}">Unread</button>` : ''}
+    ${S.me.folder_bar !== true && (S.items.length || S.unreadOnly) && !['drafts', 'sent', 'scheduled'].includes(S.folder) ? `<button class="punread" type="button" data-act="unreadonly" aria-pressed="${S.unreadOnly}">Unread</button>` : ''}
     <button class="iconbtn refresh" type="button" data-act="refresh" aria-label="Check for new mail"${S.refreshing ? ' aria-busy="true"' : ''}>${icon('refresh')}</button>
     <button class="me-b" type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="Your account">${avatar({ addr: S.me.address, name: S.me.display })}</button></div>`;
 }
@@ -7400,7 +7400,7 @@ function drawSettings(sec) {
       ${group(
         'h-fbar',
         'Mail list on phones',
-        `<ul class="kv"><li class="wide"><span class="k" id="fbarlab">Folder bar<small>The row of folders across the top. They are in the menu too.</small></span><span class="val"><button class="sw" type="button" role="switch" aria-checked="${S.me.folder_bar !== false}" aria-labelledby="fbarlab" data-set="folderbar"></button></span></li></ul>`,
+        `<ul class="kv"><li class="wide"><span class="k" id="fbarlab">Folder bar<small>The row of folders across the top. They are in the menu too.</small></span><span class="val"><button class="sw" type="button" role="switch" aria-checked="${S.me.folder_bar === true}" aria-labelledby="fbarlab" data-set="folderbar"></button></span></li></ul>`,
       )}`,
     account: () => `
       ${group('h-name', 'Your name', `<ul class="kv">${row('Your name', '', `<form class="dname" id="dnamef"><div class="field"><input id="dname" maxlength="64" autocomplete="name" value="${esc(S.me.display || '')}" placeholder="${esc((S.me.address || '').split('@')[0])}" aria-labelledby="h-name"></div><button class="pill sm" type="submit" hidden>Save</button></form>`, 'Shown on mail you send.', 'nmrow')}</ul>`, { join: true })}
@@ -9210,7 +9210,7 @@ document.addEventListener('click', async e => {
     }
     if (t.dataset.set === 'folderbar') {
       try {
-        S.me = await api.setAppearance({ folder_bar: S.me.folder_bar === false });
+        S.me = await api.setAppearance({ folder_bar: S.me.folder_bar !== true });
         S.key = '';
       } catch (x) {
         toast(x.message);
