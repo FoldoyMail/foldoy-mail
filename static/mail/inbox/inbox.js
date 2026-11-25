@@ -6606,6 +6606,9 @@ function recvHtml(items) {
     })
     .join('');
 }
+const keepAlias = row => {
+  if (row?.id) S.aliases = (S.aliases || []).map(x => (x.id === row.id ? row : x));
+};
 async function aliasDetail(a) {
   pane.innerHTML = `
     <div class="in adet">
@@ -6613,6 +6616,11 @@ async function aliasDetail(a) {
       <div class="u-mt32 a-h"><h2 id="ah" tabindex="-1">${esc(a.address)}</h2><button class="iconbtn" type="button" data-copy="${esc(a.address)}" title="Copy address" aria-label="Copy address">${icon('copy')}</button></div>
       <p class="a-facts"><span class="${a.held ? 'warn' : a.active ? 'on' : ''}">${a.held ? 'Paused' : a.active ? 'Receiving' : 'Killed'}</span><span>Made ${new Date(a.created).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span><span id="recvn" hidden></span></p>
       <div class="a-note"><label class="label" for="anote">Note</label><div class="field"><input id="anote" value="${esc(a.note)}" placeholder="What it's for" maxlength="80"></div></div>
+      ${
+        S.me.plan === 'free'
+          ? ''
+          : `<div class="a-note"><label class="label" for="aname">Name on mail you send from it</label><div class="field"><input id="aname" value="${esc(a.display || '')}" placeholder="${esc(S.me.display || a.address.split('@')[0])}" maxlength="64" autocomplete="off"></div></div>`
+      }
       <div class="a-acts">
         ${
           a.locked
@@ -6628,11 +6636,20 @@ async function aliasDetail(a) {
   if (phone()) $('#ah').focus({ preventScroll: true });
   $('#anote').addEventListener('change', async e => {
     try {
-      await api.updateAlias(a.id, { note: e.target.value.trim() });
+      keepAlias(await api.updateAlias(a.id, { note: e.target.value.trim() }));
     } catch (x) {
       return toast(x.message);
     }
     toast('Note saved');
+    showAliases(a.id);
+  });
+  $('#aname')?.addEventListener('change', async e => {
+    try {
+      keepAlias(await api.updateAlias(a.id, { display: e.target.value.trim() }));
+    } catch (x) {
+      return toast(x.message);
+    }
+    toast('Name saved');
     showAliases(a.id);
   });
   let r;
