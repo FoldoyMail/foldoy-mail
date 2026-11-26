@@ -544,13 +544,13 @@ function lockedPane() {
           : s.can_apply
             ? [
                 'Ask for approval.',
-                'Spam is not allowed here, to protect our domains. Tell us what you will use this account for, or add funds to open it now.',
+                'Spammers use VPNs and Tor, and spam harms our domains’ reputation. Explain that you’re not a spammer, or add funds to open your account now.',
                 '<button class="pill light md" type="button" data-act="askok">Request approval</button>',
                 true,
               ]
             : [
                 'Your account is locked for now.',
-                `Spam is not allowed here, to protect our domains. Add funds to open your account now, or ask for approval from ${esc(at)}.`,
+                `Spammers use VPNs and Tor, and spam harms our domains’ reputation. Add funds to open your account now, or ask for approval from ${esc(at)}.`,
                 '',
               ];
   const fund = s.rejected
@@ -561,7 +561,7 @@ function lockedPane() {
     <h2>${h}</h2>
     <p><b>${esc(S.me.address || '')}</b></p>
     <p>${p}</p>
-    ${note ? `<div class="asknote"><textarea id="asknote" maxlength="1000" rows="3" placeholder="${s.rejected ? 'Your answer' : 'What will you use this account for?'}" aria-label="What you will use the account for"></textarea></div>` : ''}
+    ${note ? `<div class="asknote"><textarea id="asknote" maxlength="1000" rows="3" placeholder="${s.rejected ? 'Your answer' : 'Explain that you’re not a spammer'}" aria-label="Your explanation"></textarea></div>` : ''}
     <p class="say bad" id="askerr" aria-live="assertive"></p>
     <div class="acts">${go}${fund}<button class="pill ghost md" type="button" data-act="logout">Log out</button></div>
     <p class="lockmore"><a href="mailto:support@foldoy.com">support@foldoy.com</a><button class="linkbtn" type="button" id="lockdel">Delete account</button></p>
@@ -578,7 +578,7 @@ function lockedPane() {
     b.onclick = async () => {
       const why = ($('#asknote')?.value || '').trim();
       if (why.length < 10) {
-        $('#askerr').textContent = 'Tell us in a sentence what you will use the account for.';
+        $('#askerr').textContent = 'Explain in a sentence that you’re not a spammer.';
         $('#asknote')?.focus();
         return;
       }
