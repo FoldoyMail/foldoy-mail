@@ -751,7 +751,7 @@ export function mime(raw) {
     const head = cut < 0 ? part : part.slice(0, cut),
       body = cut < 0 ? '' : part.slice(cut).replace(/^\r?\n\r?\n/, '');
     const h = head.replace(/\r?\n[ \t]+/g, ' ');
-    if (top) {
+    if (top || (out.subject === null && /\bprotected-headers=/i.test(h))) {
       const sj = h.match(/^subject:[ \t]*(.*)$/im);
       if (sj) out.subject = decodeWords(sj[1]).trim();
     }
@@ -771,11 +771,18 @@ export function mime(raw) {
     if (type.startsWith('multipart/')) {
       const bd = (h.match(/boundary="?([^";]+)"?/i) || [])[1];
       if (!bd) return;
-      body
-        .split(new RegExp(`\\r?\\n?--${bd.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:--)?\\r?\\n?`))
-        .forEach(p => p.trim() && walk(p));
+      const seg = body.split(
+        new RegExp(
+          `(?:^|\\r?\\n)--${bd.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(--)?[ \\t]*(?:\\r?\\n|$)`,
+        ),
+      );
+      for (let i = 1; i + 1 < seg.length; i += 2) {
+        if (seg[i]) break;
+        if (seg[i + 1].trim()) walk(seg[i + 1]);
+      }
       return;
     }
+    if (type === 'application/pgp-signature') return;
     const disp = (h.match(/^content-disposition:\s*([^;\s]+)/im) || [, ''])[1].toLowerCase();
     const fname = param(h, 'filename') || param(h, 'name');
     const cid = ((h.match(/^content-id:\s*<?([^>\s]+)>?/im) || [])[1] || '').toLowerCase() || null;
