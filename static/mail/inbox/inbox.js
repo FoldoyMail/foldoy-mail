@@ -553,6 +553,10 @@ function lockedPane() {
                 `Accounts made over a VPN or Tor are checked before they can be used. Add funds to open it at once, or ask for approval from ${esc(at)}.`,
                 '',
               ];
+  const why =
+    s.hold_kind === 'plan'
+      ? ''
+      : '<p class="lockwhy">We’re new, so we need to protect our domains’ reputation.</p>';
   const fund = s.rejected
     ? ''
     : `<a class="pill ${go ? 'line' : 'light'} md" href="/account/deposit/">Add funds</a>`;
@@ -561,6 +565,7 @@ function lockedPane() {
     <h2>${h}</h2>
     <p><b>${esc(S.me.address || '')}</b></p>
     <p>${p}</p>
+    ${why}
     ${note ? `<div class="asknote"><textarea id="asknote" maxlength="1000" rows="3" placeholder="${s.rejected ? 'Your answer' : 'What will you use this account for?'}" aria-label="What you will use the account for"></textarea></div>` : ''}
     <p class="say bad" id="askerr" aria-live="assertive"></p>
     <div class="acts">${go}${fund}<button class="pill ghost md" type="button" data-act="logout">Log out</button></div>
