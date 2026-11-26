@@ -66,7 +66,7 @@ const goUrl = () => (S.me.deposits_open ? DEPOSIT_URL : PLANS_URL);
 const SEES_URL = location.hostname.startsWith('mail.')
   ? `${location.protocol}//${location.hostname.slice(5)}/what-we-can-see/`
   : '/what-we-can-see/';
-const PLAN = { free: 'Free', plus: 'foldoy+', polar: 'Polar' };
+const PLAN = { free: 'Free', plus: 'foldoy+', polar: 'Polar', early: 'Early supporter' };
 const usd = n => `$${Number(n || 0).toFixed(2)}`;
 const gb = b =>
   b >= 1e9
@@ -188,7 +188,7 @@ function needPlans(redraw) {
 }
 const monthly = p => `${usd(p.prices.month).replace(/\.00$/, '')} a month`;
 const UNL = { aliases: 10000, domains: 100 };
-const unl = (n, kind) => n >= UNL[kind];
+const unl = (n, kind) => n === UNL[kind];
 const ofLim = (used, lim, kind) => (unl(lim, kind) ? `${used}` : `${used} of ${lim}`);
 const LIFTS = {
   aliases: [
@@ -852,7 +852,7 @@ function renderRail() {
     <button class="me-a" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="memenu" title="${esc(S.me.address)}">${avatar({ addr: S.me.address }, ' me-av')}<span>${esc(S.me.address)}</span><svg class="i chev-d" viewBox="0 0 20 20" aria-hidden="true"><path d="M6 8l4 4 4-4"/></svg></button>
     <div class="memenu acard" id="memenu" role="menu" hidden>${acctCard()}</div>
     </div>
-    <span class="me-p">${PLAN[S.me.plan]}</span>
+    <span class="me-p${S.me.plan === 'early' ? ' flair' : ''}">${PLAN[S.me.plan]}</span>
     ${meter()}
 `;
   const acct = $('#me .acct');
@@ -7061,6 +7061,7 @@ function drawSettings(sec) {
   const price = (() => {
     const d = S.me.plan_detail;
     if (S.me.plan === 'free') return '';
+    if (d?.lifetime) return 'paid once, for life';
     if (d?.price_usd && d.period) return `${usd(d.price_usd).replace(/\.00$/, '')} a ${d.period}`;
     const p = (needPlans(again) || []).find(x => x.id === S.me.plan);
     return p?.prices ? monthly(p) : '';
@@ -7763,7 +7764,7 @@ function drawSettings(sec) {
           ${S.me.plan_detail?.status === 'grace' ? row('Payment', card ? '<b class="warn">Your card was declined. Stripe tries again over the next days.</b>' : '<b class="warn">Due. Add funds to keep your plan.</b>', card ? `<button class="pill light sm" type="button" data-set="billing-portal">Update card</button>` : '') : ''}
           ${S.me.plan_detail?.renewal_short && S.me.plan_detail?.status !== 'grace' ? row('Renewal', `<b class="warn">Your balance won't cover it on ${dayMonth(S.me.plan_detail.renewal_short)}</b>`, `<a class="pill light sm" href="${DEPOSIT_URL}">Add funds</a>`) : ''}
           ${S.me.plan_detail?.ends_at ? row('Ends', `<b class="warn">${dayMonth(S.me.plan_detail.ends_at)}</b>`, `<button class="pill light sm" type="button" data-set="plan-resume">Keep my plan</button>`) : ''}
-          ${S.me.plan_detail?.renews_at && S.me.plan !== 'free' && !S.me.plan_detail?.ends_at ? row('Renews', `<b>${dayMonth(S.me.plan_detail.renews_at)}</b>`, card && setMode !== 'plan-cancel' ? `<button class="pill line sm" type="button" data-set="plan-cancel">Cancel</button>` : '') : ''}
+          ${S.me.plan_detail?.renews_at && S.me.plan !== 'free' && !S.me.plan_detail?.ends_at && !S.me.plan_detail?.lifetime ? row('Renews', `<b>${dayMonth(S.me.plan_detail.renews_at)}</b>`, card && setMode !== 'plan-cancel' ? `<button class="pill line sm" type="button" data-set="plan-cancel">Cancel</button>` : '') : ''}
           ${card && setMode === 'plan-cancel' && !S.me.plan_detail?.ends_at ? `<li class="kv-form"><p class="plain">Your card won't be charged again. ${PLAN[S.me.plan]} stays until ${dayMonth(S.me.plan_detail.renews_at)}, then the account moves to Free.</p><div class="acts"><button class="pill danger md" type="button" data-set="plan-cancel-ok">Cancel plan</button><button class="pill line md" type="button" data-set="">Keep it</button></div></li>` : ''}
           ${S.me.storage ? row('Storage', meter()) : ''}
           ${boxFull ? `<li class="impnote">${wall('storage', 'Your mailbox is full. Delete some mail or move to a bigger plan.', again)}</li>` : ''}

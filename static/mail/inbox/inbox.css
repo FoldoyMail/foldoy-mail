@@ -10503,3 +10503,10 @@ html:root :is(.me-b, .ac-id, .acct .me-a) .av {
     display: inline-flex;
   }
 }
+
+.me-p.flair {
+  color: #93e6c8;
+}
+.me-p.flair::before {
+  content: '★ ';
+}
