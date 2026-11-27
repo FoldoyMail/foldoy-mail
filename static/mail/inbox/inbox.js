@@ -852,7 +852,7 @@ function renderRail() {
     <button class="me-a" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="memenu" title="${esc(S.me.address)}">${avatar({ addr: S.me.address }, ' me-av')}<span>${esc(S.me.address)}</span><svg class="i chev-d" viewBox="0 0 20 20" aria-hidden="true"><path d="M6 8l4 4 4-4"/></svg></button>
     <div class="memenu acard" id="memenu" role="menu" hidden>${acctCard()}</div>
     </div>
-    <span class="me-p${S.me.plan === 'early' ? ' flair' : ''}">${PLAN[S.me.plan]}</span>
+    <span class="me-p${S.me.plan === 'early' ? ' flair' : ''}">${PLAN[S.me.plan]}${S.me.plan === 'early' && S.me.supporter ? ` #${S.me.supporter}` : ''}</span>
     ${meter()}
 `;
   const acct = $('#me .acct');
@@ -7760,6 +7760,7 @@ function drawSettings(sec) {
         'Plan and storage',
         `<ul class="kv">
           ${row('Plan', `<b class="strong">${PLAN[S.me.plan]}${price ? `<span class="dim">, ${price}</span>` : ''}</b>`, `<a class="pill ${S.me.plan === 'free' ? 'light' : 'line'} sm" href="${PLANS_URL}">${S.me.plan === 'free' ? 'Get foldoy+' : 'Change'}</a>`)}
+          ${S.me.early_offer ? row('Early supporter', `<b>$${esc(S.me.early_offer.price)} once</b>`, `<a class="pill line sm" href="${PLANS_URL}">See it</a>`, `Everything in foldoy+ for life, with ${esc(S.me.early_offer.storage)}${S.me.early_offer.left != null ? `. ${S.me.early_offer.left} left` : ''}`) : ''}
           ${card ? row('Paid by', '<b>Card, through Stripe</b>', `<button class="pill line sm" type="button" data-set="billing-portal">Manage billing</button>`) : ''}
           ${S.me.plan_detail?.status === 'grace' ? row('Payment', card ? '<b class="warn">Your card was declined. Stripe tries again over the next days.</b>' : '<b class="warn">Due. Add funds to keep your plan.</b>', card ? `<button class="pill light sm" type="button" data-set="billing-portal">Update card</button>` : '') : ''}
           ${S.me.plan_detail?.renewal_short && S.me.plan_detail?.status !== 'grace' ? row('Renewal', `<b class="warn">Your balance won't cover it on ${dayMonth(S.me.plan_detail.renewal_short)}</b>`, `<a class="pill light sm" href="${DEPOSIT_URL}">Add funds</a>`) : ''}
