@@ -55,8 +55,11 @@ export function kdfOk(kdf) {
     );
   return false;
 }
+const NO_WASM =
+  'Your browser has WebAssembly switched off, and foldoy needs it to sign you in. In Tor Browser, set the security level to Standard.';
 async function masterKey(password, kdf) {
   if (!kdfOk(kdf)) throw new Error('weak-kdf');
+  if (typeof WebAssembly !== 'object') throw new Error(NO_WASM);
   const h = await argon();
   return (
     await h.argon2id({
