@@ -28,7 +28,8 @@
     <noscript><div class="nojs-card">
       <h1>Turn on JavaScript to use foldoy mail</h1>
       <p>Your password is turned into your key here in your browser and never sent to us, and that takes JavaScript.</p>
-      <p>In Tor Browser, set the security level to Standard.</p>
+      {% if nojs_on and mode != "signup" %}<p><a class="nojs-go" href="/mail/nojs/">Sign in without JavaScript</a></p>
+      <p>Or in Tor Browser, set the security level to Standard.</p>{% else %}<p>In Tor Browser, set the security level to Standard.</p>{% endif %}
     </div></noscript>
     {% if plan_step %}
     <form class="step plans" id="plan" novalidate hidden>
