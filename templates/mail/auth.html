@@ -25,12 +25,12 @@
 <div class="xwrap">
 <main class="split">
   <div class="form-col">
-    <noscript><div class="nojs-card">
+    {% if nojs_on %}<noscript>{% if mode == "signup" %}{% include "nojs/_signup_form.html" %}{% else %}{% include "nojs/_login_form.html" %}{% endif %}</noscript>
+    {% else %}<noscript><div class="nojs-card">
       <h1>Turn on JavaScript to use foldoy mail</h1>
       <p>Your password is turned into your key here in your browser and never sent to us, and that takes JavaScript.</p>
-      {% if nojs_on and mode != "signup" %}<p><a class="nojs-go" href="/mail/nojs/">Sign in without JavaScript</a></p>
-      <p>Or in Tor Browser, set the security level to Standard.</p>{% else %}<p>In Tor Browser, set the security level to Standard.</p>{% endif %}
-    </div></noscript>
+      <p>In Tor Browser, set the security level to Standard.</p>
+    </div></noscript>{% endif %}
     {% if plan_step %}
     <form class="step plans" id="plan" novalidate hidden>
       <h1 class="hl" tabindex="-1">Choose your plan</h1>
