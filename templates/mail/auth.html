@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="{% static 'mail/shared/base.css' %}">
 <link rel="stylesheet" href="{% static 'mail/signup/signup.css' %}">
 <link rel="stylesheet" href="{% static 'mail/signup-inline.css' %}">
+<noscript><link rel="stylesheet" href="{% static 'mail/signup/noscript.css' %}"></noscript>
 <link rel="modulepreload" href="{% static 'mail/shared/api.js' %}">
 <link rel="modulepreload" href="{% static 'mail/shared/ui.js' %}">
 <link rel="modulepreload" href="{% static 'mail/shared/pgp.js' %}">
@@ -24,6 +25,11 @@
 <div class="xwrap">
 <main class="split">
   <div class="form-col">
+    <noscript><div class="nojs-card">
+      <h1>Turn on JavaScript to use foldoy mail</h1>
+      <p>Your password is turned into your key here in your browser and never sent to us, and that takes JavaScript.</p>
+      <p>In Tor Browser, set the security level to Standard.</p>
+    </div></noscript>
     {% if plan_step %}
     <form class="step plans" id="plan" novalidate hidden>
       <h1 class="hl" tabindex="-1">Choose your plan</h1>
@@ -192,6 +198,5 @@
 </div>
 
 <script type="module" src="{% static 'mail/signup/auth.js' %}"></script>
-<noscript><p class="noscript-note">foldoy mail needs JavaScript: your password never leaves your browser.</p></noscript>
 </body>
 </html>
