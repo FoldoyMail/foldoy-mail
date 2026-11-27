@@ -8625,7 +8625,9 @@ function drawSettings(sec) {
         S.key = '';
         showSettings();
       } catch (x) {
-        err.textContent = x.message;
+        err.textContent = /recovery copy of the new key/.test(x.message)
+          ? 'Your recovery code could not be checked in this browser, so the new key was not made. Write to support@foldoy.com.'
+          : x.message;
         btn.removeAttribute('aria-busy');
         btn.textContent = setMode === 'pp-own' ? 'Use this key' : 'Make a key here';
       }

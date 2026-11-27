@@ -626,8 +626,16 @@ export const account = {
   ppBackup: (s, pkey) => pgp.ppBackup(s.address, pkey),
   async keyHere(password, s, code) {
     if (OPENED) await OPENED;
+    let rec = await recOf(s);
+    if (!rec && s?.recovery?.set && !ppOn(s)) {
+      try {
+        const { wrap } = await pgp.derive(password, s.kdf);
+        await pgp.unlockAll(wrap, s.keys);
+        rec = await recOf(s);
+      } catch {}
+    }
     const k = await pgp.newMainKey(s.address, password, s.kdf);
-    const rcopy = (await recOf(s)) ? await pgp.copyForAddress(null, REC) : null;
+    const rcopy = rec ? await pgp.copyForAddress(null, rec) : null;
     const r = await api.setKey({
       auth: k.auth,
       code,
